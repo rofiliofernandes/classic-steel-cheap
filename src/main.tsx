@@ -1277,12 +1277,12 @@ function VideoGallery({ data }: { data: any }) {
     return { v: items[i], i, off };
   });
   return (
-    <section className="referenceSection instagramReels videoGallery" id="videos">
+    <section className="referenceSection instagramReels videoGallery" id="projects">
       <div className="referenceWrap">
         <div className="referenceSectionHead">
           <div>
-            <small>FEATURED VIDEOS</small>
-            <h2>See the work in motion.</h2>
+            <small>OUR PROJECTS</small>
+            <h2>Real work. Different spaces.</h2>
             <p>Swipe to change video. Tap the video to play or pause.</p>
           </div>
           {ig && (
@@ -1359,6 +1359,11 @@ function VideoGallery({ data }: { data: any }) {
             <ChevronRight size={22} />
           </button>
         </div>
+      </div>
+      <div className="centerAction">
+        <a className="referenceButton dark" href="/projects">
+          EXPLORE ALL PROJECTS <ArrowRight size={13} />
+        </a>
       </div>
     </section>
   );
@@ -1602,7 +1607,6 @@ function Home() {
         {data?.festival ? <FestivalBanner data={data} /> : <Hero data={data} />}
         <About data={data} />
         <Services services={data.services || []} photos={data.photos || []} />
-        <OurGallery data={data} />
         <VideoGallery data={data} />
         <Testimonials data={data} />
         <QuoteBand />
@@ -1613,6 +1617,118 @@ function Home() {
   );
 }
 
+function ProjectVideoPlayer({ videos }: { videos: any[] }) {
+  const [active, setActive] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const ref = useRef<HTMLVideoElement>(null);
+  const touchX = useRef<number | null>(null);
+  const n = videos.length;
+  const key = videos.map((v) => v.id).join("|");
+  useEffect(() => {
+    setActive(0);
+    setPlaying(false);
+    setProgress(0);
+  }, [key]);
+  if (!n) return null;
+  const v = videos[Math.min(active, n - 1)];
+  const go = (d: number) => {
+    ref.current?.pause();
+    setPlaying(false);
+    setProgress(0);
+    setActive((x) => (((x + d) % n) + n) % n);
+  };
+  const pick = (k: number) => {
+    ref.current?.pause();
+    setPlaying(false);
+    setProgress(0);
+    setActive(k);
+  };
+  const toggle = () => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.paused) el.play().catch(() => setPlaying(false));
+    else el.pause();
+  };
+  return (
+    <section className="projectVideo">
+      <div
+        className="projectVideoStage"
+        onTouchStart={(e) => {
+          touchX.current = e.touches[0].clientX;
+        }}
+        onTouchEnd={(e) => {
+          if (touchX.current == null) return;
+          const dx = e.changedTouches[0].clientX - touchX.current;
+          touchX.current = null;
+          if (Math.abs(dx) > 45 && n > 1) go(dx < 0 ? 1 : -1);
+        }}
+      >
+        {v.thumbnail_url && <img className="projectVideoBackdrop" src={v.thumbnail_url} alt="" aria-hidden="true" />}
+        <video
+          key={v.id}
+          ref={ref}
+          src={v.media_url}
+          poster={v.thumbnail_url || undefined}
+          playsInline
+          preload="metadata"
+          aria-label={v.title || "Project video"}
+          onClick={toggle}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => {
+            setPlaying(false);
+            setProgress(0);
+          }}
+          onTimeUpdate={(e) => {
+            const el = e.currentTarget;
+            setProgress(el.duration ? (el.currentTime / el.duration) * 100 : 0);
+          }}
+        />
+        {!playing && (
+          <button type="button" className="projectVideoPlay" onClick={toggle} aria-label="Play video">
+            <Play size={30} fill="currentColor" />
+          </button>
+        )}
+        {n > 1 && (
+          <>
+            <button type="button" className="projectVideoArrow prev" onClick={() => go(-1)} aria-label="Previous video">
+              <ChevronLeft size={24} />
+            </button>
+            <button type="button" className="projectVideoArrow next" onClick={() => go(1)} aria-label="Next video">
+              <ChevronRight size={24} />
+            </button>
+          </>
+        )}
+        <span className="videoProgress" aria-hidden="true">
+          <i style={{ width: `${progress}%` }} />
+        </span>
+      </div>
+      <div className="projectVideoMeta">
+        <b>{v.title || "Project video"}</b>
+        <span>
+          Video {Math.min(active, n - 1) + 1} of {n}
+          {n > 1 ? " · swipe or use the arrows" : ""}
+        </span>
+      </div>
+      {n > 1 && (
+        <div className="projectVideoThumbs">
+          {videos.map((x, k) => (
+            <button
+              type="button"
+              key={x.id}
+              className={k === active ? "active" : ""}
+              onClick={() => pick(k)}
+              aria-label={`Play ${x.title || "video " + (k + 1)}`}
+            >
+              {x.thumbnail_url ? <img src={x.thumbnail_url} alt="" loading="lazy" /> : <Play size={16} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 function Gallery() {
   const data = usePublicData();
   useDocumentMeta(
@@ -1620,20 +1736,29 @@ function Gallery() {
     "Browse completed Classic Steel railing, gate, grill, door, shed, window and glass work in Goa.",
   );
   const photos = data.photos || [];
-  const order = (c: string) => (CATS.indexOf(c) === -1 ? 99 : CATS.indexOf(c));
-  const cats = [
-    "All",
-    ...Array.from(new Set<string>(photos.map((p: any) => p.category || p.occasion || "Other"))).sort((a, b) => order(a) - order(b)),
-  ];
-  const [cat, setCat] = useState("All");
-  const shown = cat === "All" ? photos : photos.filter((p: any) => (p.category || p.occasion || "Other") === cat);
+  const videos = ((data.videos || []) as any[]).filter((v) => v.media_url);
+  const catOf = (x: any) => x.category || x.occasion || "Other";
+  const serviceOrder = ((data.services || []) as any[]).map((s: any) => s.title);
+  const order = (c: string) => {
+    const i = serviceOrder.indexOf(c);
+    if (i !== -1) return i;
+    const j = CATS.indexOf(c);
+    return j === -1 ? 99 : 50 + j;
+  };
+  const cats = ["All", ...Array.from(new Set<string>([...photos.map(catOf), ...videos.map(catOf)])).sort((a, b) => order(a) - order(b))];
+  const [cat, setCat] = useState(() => {
+    const q = new URLSearchParams(location.search).get("category");
+    return q || "All";
+  });
+  const shownPhotos = cat === "All" ? photos : photos.filter((p: any) => catOf(p) === cat);
+  const shownVideos = cat === "All" ? videos : videos.filter((v: any) => catOf(v) === cat);
   return (
     <>
       <Nav page="projects" />
       <section className="galleryPageHead">
         <small>PROJECTS</small>
         <h1>Real work. Different spaces.</h1>
-        <p>Browse our railings, gates, grills, doors, sheds, windows and glass work. Tap any image to view it larger.</p>
+        <p>Pick a category to see its videos and photos. Tap any photo to view it larger.</p>
       </section>
       <div className="galleryFilter">
         {(cats as string[]).map((c) => (
@@ -1642,8 +1767,8 @@ function Gallery() {
           </button>
         ))}
       </div>
-      <ImageGrid photos={shown} limit={shown.length || 15} />
-      <VideoGallery data={data} />
+      <ProjectVideoPlayer videos={shownVideos} />
+      {shownPhotos.length || !shownVideos.length ? <ImageGrid photos={shownPhotos} limit={shownPhotos.length || 15} /> : null}
       <QuoteBand />
       <Footer data={data} />
       <WhatsAppWidget />
@@ -4435,6 +4560,16 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
                 >
                   <ArrowDown size={16} />
                 </button>
+                <select
+                  className="input videoCatSelect"
+                  value={v.category || "Other"}
+                  onChange={(e) => save(v, { category: e.target.value })}
+                  aria-label={`Category for ${v.title}`}
+                >
+                  {Array.from(new Set([...cats, "Other", v.category || "Other"])).map((c: string) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
                 <button
                   className="btn outline"
                   onClick={() => {
