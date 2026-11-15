@@ -12,7 +12,7 @@ run_worker_first = ["/api/*", "/media/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "classic-steel-db"
-database_id = "PASTE-YOUR-ID-HERE"
+database_id = "83c4ad4a-2f93-4e05-aa2b-be7997a1c316"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
@@ -24,10 +24,10 @@ bucket_name = "classic-steel-media"
 SITE_NAME = "Classic Steel"
 PHONE = "REPLACE_WITH_CLIENT_PHONE"
 MAPS_URL = "REPLACE_WITH_CLIENT_MAPS_URL"
-ADMIN_HOST = "YOUR-WORKER-ADDRESS"
+ADMIN_HOST = "classic-steel-cheap.rofitest8.workers.dev"
 GOOGLE_PLACE_ID = ""
 INSTAGRAM_APP_ID = ""
-INSTAGRAM_REDIRECT_URI = "https://YOUR-WORKER-ADDRESS/api/instagram/callback"
+INSTAGRAM_REDIRECT_URI = "https://classic-steel-cheap.rofitest8.workers.dev/api/instagram/callback"
 INSTAGRAM_GRAPH_VERSION = "v24.0"
 ADMIN_OWNER_EMAIL = ""
 RESEND_FROM_EMAIL = "Classic Steel <admin@your-verified-domain.com>"
