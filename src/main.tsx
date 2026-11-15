@@ -2010,7 +2010,7 @@ function toWebp(file: File) {
     const img = new Image(),
       url = URL.createObjectURL(file);
     img.onload = () => {
-      const max = 2400,
+      const max = 2048,
         s = Math.min(1, max / Math.max(img.width, img.height)),
         w = Math.max(1, Math.round(img.width * s)),
         h = Math.max(1, Math.round(img.height * s));
@@ -2027,7 +2027,7 @@ function toWebp(file: File) {
           resolve(new File([b], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp" }));
         },
         "image/webp",
-        0.92,
+        0.86,
       );
     };
     img.onerror = reject;
@@ -3949,13 +3949,21 @@ function ServicesAdmin({ services, refresh }: any) {
   const uploadImages = async (files: FileList | null) => {
     if (!files || !files.length) return;
     const added: string[] = [];
+    let skipped = 0;
+    // Every image already used on any service (and in this editor) — fingerprints are part of the file name.
+    const known = [...form.images, ...services.flatMap((x: any) => parseImages(x.images))].join(" ");
     try {
       for (let k = 0; k < files.length; k++) {
         setUploading(`Uploading ${k + 1} of ${files.length}…`);
+        const fp = "img-" + (await fileHash(files[k])).slice(0, 20);
+        if (known.includes(fp) || added.some((x) => x.includes(fp))) {
+          skipped++;
+          continue;
+        }
         const webp = await toWebp(files[k]);
         const signed = await api("/api/admin/upload-url", {
           method: "POST",
-          body: JSON.stringify({ size: webp.size, contentType: "image/webp", name: webp.name, purpose: "service-image" }),
+          body: JSON.stringify({ size: webp.size, contentType: "image/webp", name: fp + ".webp", purpose: "service-image" }),
         });
         const put = await fetch(signed.url, { method: "PUT", headers: { "Content-Type": "image/webp" }, body: webp });
         if (!put.ok) {
@@ -3968,6 +3976,7 @@ function ServicesAdmin({ services, refresh }: any) {
       notify(e.message);
     } finally {
       if (added.length) setForm((f: any) => ({ ...f, images: [...f.images, ...added].slice(0, 20) }));
+      if (skipped) notify(`Skipped ${skipped} image${skipped === 1 ? "" : "s"} already used on the site.`);
       setUploading("");
       const el = document.querySelector<HTMLInputElement>(".serviceImageInput");
       if (el) el.value = "";
@@ -4216,6 +4225,63 @@ async function downloadQueuedVideos(onStatus?: (text: string) => void) {
   }
   return { downloaded, failed, pending, error };
 }
+// Re-encodes a video in the browser (hardware H.264) to shrink it while keeping it visually the same:
+// long side capped at 1920px (Full HD), high quality setting. Falls back to the original file if the
+// browser can't encode, or if the result wouldn't be meaningfully smaller.
+async function compressVideo(file: File, onProgress: (pct: number) => void): Promise<File> {
+  if (typeof (window as any).VideoEncoder === "undefined") return file;
+  try {
+    const mb = await import("mediabunny");
+    const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
+    const target = new mb.BufferTarget();
+    const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }), target });
+    const conversion = await mb.Conversion.init({
+      input,
+      output,
+      video: (track: any) => {
+        const w = track.displayWidth,
+          h = track.displayHeight;
+        const opts: any = { codec: "avc", quality: mb.QUALITY_HIGH, forceTranscode: true };
+        if (Math.max(w, h) > 1920) {
+          if (w >= h) opts.width = 1920;
+          else opts.height = 1920;
+        }
+        return opts;
+      },
+      // Audio is copied as-is (no re-encoding): it is already small and stays exactly the same.
+    });
+    if (!conversion.isValid || conversion.discardedTracks.length) {
+      console.warn(
+        "Video compression skipped: unsupported tracks",
+        conversion.discardedTracks.map((d: any) => d.reason),
+      );
+      return file;
+    }
+    conversion.onProgress = (p: number) => onProgress(Math.round(p * 100));
+    await conversion.execute();
+    const buf = target.buffer;
+    if (!buf || buf.byteLength >= file.size * 0.9) {
+      console.warn("Video compression skipped: result not smaller", buf?.byteLength, file.size);
+      return file;
+    }
+    return new File([buf], file.name.replace(/\.[^.]+$/, "") + ".mp4", { type: "video/mp4" });
+  } catch (e) {
+    console.warn("Video compression skipped:", e);
+    return file;
+  }
+}
+async function fileHash(file: Blob) {
+  // Large files: fingerprint the size plus the first and last 8 MB (fast, low memory, still unique in practice).
+  const CHUNK = 8 * 1048576;
+  const buf =
+    file.size <= 3 * CHUNK
+      ? await file.arrayBuffer()
+      : await new Blob([String(file.size), file.slice(0, CHUNK), file.slice(file.size - CHUNK)]).arrayBuffer();
+  const d = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(d))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 function captureVideoPoster(file: File): Promise<Blob | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -4290,21 +4356,36 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
   const upload = async () => {
     if (!file) return notify("Choose a video file first.");
     if (!title.trim()) return notify("Enter a title for the video.");
-    if (file.size > VIDEO_UPLOAD_LIMIT)
-      return notify(
-        "This video is larger than 95 MB. Please compress it (for example with your phone's share/export option) and try again.",
-      );
-    const type = (file.type || "video/mp4").toLowerCase();
-    if (!["video/mp4", "video/webm", "video/quicktime"].includes(type)) return notify("Please upload an MP4, WebM or MOV video.");
+    const origType = (file.type || "video/mp4").toLowerCase();
+    if (!["video/mp4", "video/webm", "video/quicktime"].includes(origType)) return notify("Please upload an MP4, WebM or MOV video.");
+    if (file.size > 1536 * 1048576) return notify("This video is over 1.5 GB. Please trim it shorter first.");
     setBusy("upload");
     setProgress(0);
     try {
-      const posterBlob = await captureVideoPoster(file);
+      setStatus("Checking for duplicates…");
+      const contentHash = await fileHash(file);
+      const check: any = await api("/api/admin/videos/check-hash?hash=" + contentHash);
+      setStatus("");
+      if (check.duplicate) {
+        notify(`This video is already on the site as "${check.title}". It wasn't uploaded again.`);
+        return;
+      }
+      setStatus("Compressing… 0%");
+      const small = await compressVideo(file, (pct) => setStatus(`Compressing… ${pct}%`));
+      setStatus(
+        small === file ? "" : `Compressed ${(file.size / 1048576).toFixed(1)} MB → ${(small.size / 1048576).toFixed(1)} MB. Uploading…`,
+      );
+      if (small.size > VIDEO_UPLOAD_LIMIT) {
+        notify("This video is still larger than 95 MB after compression. Please trim it shorter and try again.");
+        return;
+      }
+      const type = (small.type || origType).toLowerCase();
+      const posterBlob = await captureVideoPoster(small);
       const signed = await api("/api/admin/upload-url", {
         method: "POST",
-        body: JSON.stringify({ size: file.size, contentType: type, name: file.name }),
+        body: JSON.stringify({ size: small.size, contentType: type, name: small.name }),
       });
-      await putWithProgress(signed.url, file, type, setProgress);
+      await putWithProgress(signed.url, small, type, setProgress);
       let poster: any = null;
       if (posterBlob) {
         try {
@@ -4327,6 +4408,7 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
           reservationId: signed.reservationId,
           poster_key: poster?.key || "",
           posterReservationId: poster?.reservationId || "",
+          content_hash: contentHash,
         }),
       });
       setFile(null);
@@ -4433,8 +4515,8 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
       <div className="panel videoAdminPanel">
         <h3>Upload a video</h3>
         <p className="muted">
-          MP4, MOV or WebM up to 95 MB. A cover image is taken from the video automatically. Uploaded videos appear first in the homepage
-          video carousel.
+          MP4, MOV or WebM. Videos are compressed automatically before uploading (Full HD, high quality) so they load fast, and a cover
+          image is taken from the video. After compression a video must be under 95 MB.
         </p>
         <div className="manualVideoGrid videoUploadGrid">
           <input
@@ -4474,6 +4556,7 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
             )}
           </button>
         </div>
+        {busy === "upload" && status && <p className="syncStatus">{status}</p>}
         {busy === "upload" && progress !== null && (
           <div className="uploadBar" aria-hidden="true">
             <i style={{ width: `${progress}%` }} />

@@ -2341,6 +2341,23 @@ app.post("/api/admin/hashtags/:hashtag/dismiss", requireAuth, async (c) => {
     .run();
   return c.json({ ok: true });
 });
+function cleanHash(v: any) {
+  const h = String(v || "").toLowerCase();
+  return /^[a-f0-9]{64}$/.test(h) ? h : "";
+}
+async function findVideoByHash(c: any, hash: string) {
+  if (!hash) return null;
+  try {
+    return await c.env.DB.prepare("SELECT id,title FROM videos WHERE content_hash=? LIMIT 1").bind(hash).first();
+  } catch {
+    return null; // column not migrated yet
+  }
+}
+// Lets the admin check for a duplicate before uploading a large file.
+app.get("/api/admin/videos/check-hash", requireAuth, async (c) => {
+  const v: any = await findVideoByHash(c, cleanHash(c.req.query("hash")));
+  return c.json({ duplicate: Boolean(v), id: v?.id || null, title: v?.title || null });
+});
 app.get("/api/admin/videos", requireAuth, async (c) =>
   c.json((await c.env.DB.prepare("SELECT * FROM videos ORDER BY sort_order,id").all()).results),
 );
@@ -2404,6 +2421,14 @@ app.post("/api/admin/videos", requireAuth, async (c) => {
   const video = await claimUploadedObject(c, textField(b.r2_key, 500), textField(b.reservationId, 100), "videos/uploads/");
   if (!video) return c.json({ error: "Uploaded video not found. Please upload it again." }, 400);
   const posterKey = textField(b.poster_key, 500);
+  const contentHash = cleanHash(b.content_hash);
+  const dup: any = await findVideoByHash(c, contentHash);
+  if (dup) {
+    // Same file is already on the site: discard this copy.
+    for (const k of [textField(b.r2_key, 500), posterKey]) if (k) await c.env.MEDIA.delete(k).catch(() => {});
+    for (const r of [textField(b.reservationId, 100), textField(b.posterReservationId, 100)]) if (r) await releaseStorage(c, r);
+    return c.json({ error: `This video is already on the site as "${dup.title}".`, duplicate: true }, 409);
+  }
   const poster = posterKey ? await claimUploadedObject(c, posterKey, textField(b.posterReservationId, 100), "videos/posters/") : null;
   const id = uid();
   const minOrder: any = await c.env.DB.prepare("SELECT MIN(sort_order) m FROM videos").first();
@@ -2438,6 +2463,11 @@ app.post("/api/admin/videos", requireAuth, async (c) => {
     );
   }
   await c.env.DB.batch(writes);
+  if (contentHash)
+    await c.env.DB.prepare("UPDATE videos SET content_hash=? WHERE id=?")
+      .bind(contentHash, id)
+      .run()
+      .catch(() => {});
   await logActivity(c, me.id, me.name || me.email, `Uploaded a video: "${title}"`);
   return c.json({ ok: true, id });
 });
