@@ -1,14 +1,6 @@
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Wedding','',0,'',1,0,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Wedding');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Pre-Wedding','',0,'',1,1,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Pre-Wedding');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Birthday','',0,'',1,2,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Birthday');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Family','',0,'',1,3,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Family');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Beach','',0,'',1,4,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Beach');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Portfolio','',0,'',1,5,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Portfolio');
-INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags)
-SELECT lower(hex(randomblob(16))),'Maternity','',0,'',1,6,'' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Maternity');
+-- Capital UPVC categories (used for the gallery filters, homepage range cards and Instagram hashtag matching).
+INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) SELECT lower(hex(randomblob(16))),'Windows','Casement and fixed UPVC windows with clean profiles, tailored to each opening.',0,'/product-1.webp',1,0,'windows,window,casement' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Windows');
+INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) SELECT lower(hex(randomblob(16))),'Sliding','Sliding windows and doors for wide glass areas that open without swinging into the room.',0,'/product-2.webp',1,1,'sliding,slidingwindow,slidingdoor' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Sliding');
+INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) SELECT lower(hex(randomblob(16))),'Doors','Openable UPVC doors for homes, balconies and entrances — practical for everyday movement.',0,'/product-3.webp',1,2,'doors,door' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Doors');
+INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) SELECT lower(hex(randomblob(16))),'Wood-finish','Wood-inspired finishes that add warmth while keeping a modern UPVC profile.',0,'/product-4.webp',1,3,'woodfinish,wooden,woodtexture' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Wood-finish');
+INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) SELECT lower(hex(randomblob(16))),'Large openings','Corner windows, balcony enclosures and wide glazed façades.',0,'/projects/project-15.webp',1,4,'largeopenings,facade,glazing' WHERE NOT EXISTS(SELECT 1 FROM services WHERE title='Large openings');

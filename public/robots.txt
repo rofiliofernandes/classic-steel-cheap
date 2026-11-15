@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://impressionphotographygoa.com/sitemap.xml
+Disallow: /admin

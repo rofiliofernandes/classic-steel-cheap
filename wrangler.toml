@@ -1,4 +1,4 @@
-name = "classic-steel-cheap"
+name = "capital-upvc"
 main = "src/worker.ts"
 compatibility_date = "2026-09-05"
 workers_dev = true
@@ -11,31 +11,33 @@ run_worker_first = ["/api/*", "/media/*"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "classic-steel-db"
-database_id = "83c4ad4a-2f93-4e05-aa2b-be7997a1c316"
+database_name = "capital-upvc-db"
+# Replace with the id printed by: npx wrangler d1 create capital-upvc-db
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA"
-bucket_name = "classic-steel-media"
-
+# Create with: npx wrangler r2 bucket create capital-upvc-media
+bucket_name = "capital-upvc-media"
 
 [vars]
-SITE_NAME = "Classic Steel"
-PHONE = "REPLACE_WITH_CLIENT_PHONE"
-MAPS_URL = "REPLACE_WITH_CLIENT_MAPS_URL"
-ADMIN_HOST = "classic-steel-cheap.rofitest8.workers.dev"
-GOOGLE_PLACE_ID = ""
+SITE_NAME = "Capital UPVC Windows & Doors"
+PHONE = "7048235723"
+MAPS_URL = "https://maps.app.goo.gl/MStEk8sBR9QoNXGu7"
+# Total storage allowed for uploaded/downloaded photos and videos (in GB).
+STORAGE_LIMIT_GB = "10"
+# Set these once your domain is connected, e.g. admin.capitalupvc.com
+ADMIN_HOST = ""
 INSTAGRAM_APP_ID = ""
-INSTAGRAM_REDIRECT_URI = "https://classic-steel-cheap.rofitest8.workers.dev/api/instagram/callback"
+INSTAGRAM_REDIRECT_URI = ""
 INSTAGRAM_GRAPH_VERSION = "v24.0"
-ADMIN_OWNER_EMAIL = ""
-RESEND_FROM_EMAIL = "Classic Steel <admin@your-verified-domain.com>"
+RESEND_FROM_EMAIL = ""
 
 [triggers]
+# Twice a day: sync Instagram photos/videos and download any queued videos.
 crons = ["0 0,12 * * *"]
 
 [observability]
 enabled = true
 head_sampling_rate = 1
-

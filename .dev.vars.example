@@ -1,25 +1,21 @@
 # Local development example. Never commit real secrets.
-SITE_NAME=Impression Photography
-PHONE=8087467783
-MAPS_URL=https://maps.google.com/?cid=17848990732573835237&entry=gps
-ADMIN_HOST=localhost:8787
+SITE_NAME=Capital UPVC Windows & Doors
+PHONE=7048235723
+MAPS_URL=https://maps.app.goo.gl/MStEk8sBR9QoNXGu7
+ADMIN_HOST=localhost:5173
 ADMIN_OWNER_EMAIL=owner@example.com
+STORAGE_LIMIT_GB=10
 
 # Generate strong random values for local development.
 SESSION_SECRET=replace-with-a-random-32-byte-secret
 TOKEN_ENCRYPTION_KEY=replace-with-a-random-32-byte-secret
 
-# Resend
+# Resend (sends the admin setup / invite emails)
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
-RESEND_FROM_EMAIL=Impression Photography <admin@example.com>
+RESEND_FROM_EMAIL=Capital UPVC <admin@example.com>
 
-# Instagram
-INSTAGRAM_APP_ID=2514565005727841
+# Instagram (photos + videos are downloaded into R2 on sync)
+INSTAGRAM_APP_ID=replace-with-app-id
 INSTAGRAM_APP_SECRET=replace-with-secret
-INSTAGRAM_REDIRECT_URI=https://ip.rofitest8.workers.dev/api/instagram/callback
+INSTAGRAM_REDIRECT_URI=https://YOUR-ADMIN-HOST/api/instagram/callback
 INSTAGRAM_GRAPH_VERSION=v24.0
-
-# YouTube / Google
-YOUTUBE_API_KEY=replace-with-secret
-GOOGLE_PLACES_API_KEY=replace-with-secret
-GOOGLE_PLACE_ID=ChIJmeK4XLzBvzsR5X9N1oBatPc
