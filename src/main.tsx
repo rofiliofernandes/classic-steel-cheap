@@ -1881,14 +1881,24 @@ function ContactPage() {
                   required
                 />
               </label>
-              <label>
-                Requirement
-                <select className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })}>
+              <div className="reqField" role="radiogroup" aria-label="What do you need?">
+                <span className="reqLabel">What do you need?</span>
+                <div className="reqChips">
                   {REQUIREMENTS.map((r) => (
-                    <option key={r}>{r}</option>
+                    <button
+                      type="button"
+                      key={r}
+                      role="radio"
+                      aria-checked={form.service === r}
+                      className={`reqChip${form.service === r ? " active" : ""}`}
+                      onClick={() => setForm({ ...form, service: r })}
+                    >
+                      {form.service === r && <Check size={14} />}
+                      {r}
+                    </button>
                   ))}
-                </select>
-              </label>
+                </div>
+              </div>
               <label>
                 Project details
                 <textarea
