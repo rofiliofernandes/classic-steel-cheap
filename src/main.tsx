@@ -1093,7 +1093,106 @@ function ServiceIcon({ title }: { title: string }) {
     </div>
   );
 }
-function Services({ services }: { services: any[] }) {
+function parseImages(v: any): string[] {
+  if (Array.isArray(v)) return v.filter(Boolean).map(String);
+  try {
+    const a = JSON.parse(String(v || "[]"));
+    return Array.isArray(a) ? a.filter(Boolean).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+function serviceSlides(s: any, photos: any[]) {
+  const own = parseImages(s.images);
+  const list = own.length ? own : s.image_url ? [s.image_url] : [];
+  if (s.include_projects !== 0 && s.include_projects !== false) {
+    const title = String(s.title || "").toLowerCase();
+    for (const p of photos) {
+      if (list.length >= 12) break;
+      if (String(p.category || p.occasion || "").toLowerCase() === title && p.image_url && !list.includes(p.image_url))
+        list.push(p.image_url);
+    }
+  }
+  return list;
+}
+function ServiceCard({ s, photos, offset }: { s: any; photos: any[]; offset: number }) {
+  const slides = serviceSlides(s, photos);
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchX = useRef<number | null>(null);
+  const n = slides.length;
+  useEffect(() => {
+    if (n < 2 || paused) return;
+    let t: any;
+    // Stagger the cards so they don't all change at the same moment.
+    const start = setTimeout(
+      () => {
+        setI((x) => (x + 1) % n);
+        t = setInterval(() => setI((x) => (x + 1) % n), 4500);
+      },
+      4500 + offset * 700,
+    );
+    return () => {
+      clearTimeout(start);
+      clearInterval(t);
+    };
+  }, [n, paused, offset]);
+  const go = (d: number) => setI((x) => (x + d + n) % n);
+  return (
+    <article onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <div
+        className="serviceMedia"
+        onTouchStart={(e) => {
+          touchX.current = e.touches[0].clientX;
+          setPaused(true);
+        }}
+        onTouchEnd={(e) => {
+          if (touchX.current == null) return;
+          const dx = e.changedTouches[0].clientX - touchX.current;
+          touchX.current = null;
+          if (Math.abs(dx) > 40 && n > 1) go(dx < 0 ? 1 : -1);
+        }}
+      >
+        {n ? (
+          slides.map((src, k) => (
+            <img
+              key={src + k}
+              src={src}
+              alt={k === i ? s.title : ""}
+              loading={k === 0 ? "lazy" : "lazy"}
+              className={k === i ? "active" : ""}
+            />
+          ))
+        ) : (
+          <ServiceIcon title={s.title} />
+        )}
+        {n > 1 && (
+          <>
+            <button type="button" className="serviceArrow prev" onClick={() => go(-1)} aria-label={`Previous ${s.title} image`}>
+              <ChevronLeft size={18} />
+            </button>
+            <button type="button" className="serviceArrow next" onClick={() => go(1)} aria-label={`Next ${s.title} image`}>
+              <ChevronRight size={18} />
+            </button>
+            <span className="serviceDots" aria-hidden="true">
+              {slides.map((_, k) => (
+                <i key={k} className={k === i ? "active" : ""} />
+              ))}
+            </span>
+          </>
+        )}
+      </div>
+      <div>
+        <h3>{s.title}</h3>
+        <p>{s.description}</p>
+        <a className="referenceButton dark serviceBtn" href={`/contact?service=${encodeURIComponent(s.title)}`}>
+          GET A QUOTE <ArrowRight size={13} />
+        </a>
+      </div>
+    </article>
+  );
+}
+function Services({ services, photos = [] }: { services: any[]; photos?: any[] }) {
   const list = services.length ? services : DEFAULT_RANGE;
   return (
     <section className="servicesSection" id="services">
@@ -1105,17 +1204,8 @@ function Services({ services }: { services: any[] }) {
           </div>
         </div>
         <div className="servicesGrid">
-          {list.map((s: any) => (
-            <article key={s.id}>
-              {s.image_url ? <img src={s.image_url} alt={s.title} loading="lazy" /> : <ServiceIcon title={s.title} />}
-              <div>
-                <h3>{s.title}</h3>
-                <p>{s.description}</p>
-                <a className="serviceLink" href={`/contact?service=${encodeURIComponent(s.title)}`}>
-                  Ask about {String(s.title).toLowerCase()} <ArrowRight size={13} />
-                </a>
-              </div>
-            </article>
+          {list.map((s: any, idx: number) => (
+            <ServiceCard key={s.id} s={s} photos={photos} offset={idx} />
           ))}
         </div>
       </div>
@@ -1511,7 +1601,7 @@ function Home() {
       <main>
         {data?.festival ? <FestivalBanner data={data} /> : <Hero data={data} />}
         <About data={data} />
-        <Services services={data.services || []} />
+        <Services services={data.services || []} photos={data.photos || []} />
         <OurGallery data={data} />
         <VideoGallery data={data} />
         <Testimonials data={data} />
@@ -3698,25 +3788,104 @@ function TestimonialsAdmin() {
   );
 }
 function ServicesAdmin({ services, refresh }: any) {
-  const [form, setForm] = useState<any>({ title: "", instagram_hashtags: "", active: true, sort_order: 0 });
+  const empty = {
+    id: "",
+    title: "",
+    description: "",
+    instagram_hashtags: "",
+    images: [] as string[],
+    include_projects: true,
+    active: true,
+    sort_order: 0,
+  };
+  const [form, setForm] = useState<any>(empty);
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState("");
+  const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<any>(null);
+  const edit = (item: any) => {
+    setForm({
+      id: item.id,
+      title: item.title || "",
+      description: item.description || "",
+      instagram_hashtags: item.instagram_hashtags || "",
+      images: parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [],
+      include_projects: item.include_projects !== 0 && item.include_projects !== false,
+      active: item.active !== 0 && item.active !== false,
+      sort_order: item.sort_order || 0,
+    });
+    setOpen(true);
+    setTimeout(() => document.querySelector(".serviceEditor")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+  const addNew = () => {
+    setForm({ ...empty, sort_order: services.length });
+    setOpen(true);
+  };
+  const uploadImages = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const added: string[] = [];
+    try {
+      for (let k = 0; k < files.length; k++) {
+        setUploading(`Uploading ${k + 1} of ${files.length}…`);
+        const webp = await toWebp(files[k]);
+        const signed = await api("/api/admin/upload-url", {
+          method: "POST",
+          body: JSON.stringify({ size: webp.size, contentType: "image/webp", name: webp.name, purpose: "service-image" }),
+        });
+        const put = await fetch(signed.url, { method: "PUT", headers: { "Content-Type": "image/webp" }, body: webp });
+        if (!put.ok) {
+          const d = await put.json().catch(() => ({}));
+          throw new Error(d.error || "Image upload failed.");
+        }
+        added.push("/media/" + signed.key);
+      }
+    } catch (e: any) {
+      notify(e.message);
+    } finally {
+      if (added.length) setForm((f: any) => ({ ...f, images: [...f.images, ...added].slice(0, 20) }));
+      setUploading("");
+      const el = document.querySelector<HTMLInputElement>(".serviceImageInput");
+      if (el) el.value = "";
+    }
+  };
+  const moveImage = (idx: number, d: number) =>
+    setForm((f: any) => {
+      const list = f.images.slice();
+      const j = idx + d;
+      if (j < 0 || j >= list.length) return f;
+      [list[idx], list[j]] = [list[j], list[idx]];
+      return { ...f, images: list };
+    });
+  const removeImage = (idx: number) => setForm((f: any) => ({ ...f, images: f.images.filter((_: any, k: number) => k !== idx) }));
   const save = async () => {
-    if (!form.title.trim()) return notify("Add a category name.");
-    await api("/api/admin/services", { method: "POST", body: JSON.stringify({ ...form, description: "", image_url: "", price: 0 }) });
-    setForm({ title: "", instagram_hashtags: "", active: true, sort_order: 0 });
-    refresh();
+    if (!form.title.trim()) return notify("Add a service name.");
+    setSaving(true);
+    try {
+      await api("/api/admin/services", {
+        method: "POST",
+        body: JSON.stringify({ ...form, id: form.id || undefined, image_url: form.images[0] || "", price: 0 }),
+      });
+      notify(form.id ? "Service saved." : "Service added.", "success");
+      setForm(empty);
+      setOpen(false);
+      refresh();
+    } catch (e: any) {
+      notify(e.message);
+    } finally {
+      setSaving(false);
+    }
   };
   const deleteService = (item: any) =>
     setConfirm({
-      title: "Delete this category?",
-      message: `Delete “${item.title}”? This cannot be undone.`,
-      confirmLabel: "Delete category",
+      title: "Delete this service?",
+      message: `Delete “${item.title}”? Its uploaded images are deleted too. This cannot be undone.`,
+      confirmLabel: "Delete service",
       action: async () => {
         try {
           await api("/api/admin/services/" + item.id, { method: "DELETE" });
           setConfirm(null);
           refresh();
-          notify("Category deleted.", "success");
+          notify("Service deleted.", "success");
         } catch (e: any) {
           setConfirm(null);
           notify(e.message);
@@ -3726,54 +3895,153 @@ function ServicesAdmin({ services, refresh }: any) {
   return (
     <>
       <div>
-        <div className="panel serviceAdminForm">
-          <input
-            className="input"
-            placeholder="Category name"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <input
-            className="input"
-            placeholder="#ssrailing, #staircaserailing (optional)"
-            value={form.instagram_hashtags}
-            onChange={(e) => setForm({ ...form, instagram_hashtags: e.target.value })}
-          />
-          <button className="btn light" onClick={save}>
-            {form.id ? "Save changes" : "Add category"}
-          </button>
-        </div>
+        {open ? (
+          <div className="panel serviceEditor">
+            <h3>{form.id ? `Edit “${form.title || "service"}”` : "Add a service"}</h3>
+            <div className="serviceEditorGrid">
+              <label>
+                Name
+                <input
+                  className="input"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="e.g. SS Railing"
+                />
+              </label>
+              <label>
+                Instagram hashtags <span className="muted">(posts with these tags go into this service)</span>
+                <input
+                  className="input"
+                  placeholder="#ssrailing, #staircaserailing"
+                  value={form.instagram_hashtags}
+                  onChange={(e) => setForm({ ...form, instagram_hashtags: e.target.value })}
+                />
+              </label>
+              <label className="wide">
+                Short description <span className="muted">(shown on the homepage card)</span>
+                <textarea
+                  className="input"
+                  rows={2}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </label>
+            </div>
+            <div className="serviceImagesHead">
+              <b>Card images</b>
+              <span className="muted">They rotate automatically on the homepage. The first one shows first.</span>
+            </div>
+            <div className="serviceImagesGrid">
+              {form.images.map((src: string, idx: number) => (
+                <div className="serviceImageItem" key={src + idx}>
+                  <img src={src} alt="" />
+                  {idx === 0 && <span className="serviceImageBadge">First</span>}
+                  <div className="serviceImageActions">
+                    <button type="button" onClick={() => moveImage(idx, -1)} disabled={idx === 0} aria-label="Move earlier">
+                      <ChevronLeft size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveImage(idx, 1)}
+                      disabled={idx === form.images.length - 1}
+                      aria-label="Move later"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                    <button type="button" className="danger" onClick={() => removeImage(idx)} aria-label="Remove image">
+                      <X size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <label className={`serviceImageAdd${uploading ? " busy" : ""}`}>
+                <Upload size={20} />
+                <span>{uploading || "Add images"}</span>
+                <input
+                  className="serviceImageInput"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={!!uploading}
+                  onChange={(e) => uploadImages(e.target.files)}
+                />
+              </label>
+            </div>
+            <label className="checkRow">
+              <input
+                type="checkbox"
+                checked={form.include_projects}
+                onChange={(e) => setForm({ ...form, include_projects: e.target.checked })}
+              />
+              Also rotate through published project photos in the “{form.title || "this"}” category
+            </label>
+            <label className="checkRow">
+              <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+              Show this service on the website
+            </label>
+            <div className="careerFormActions">
+              <button className="btn light" onClick={save} disabled={saving || !!uploading}>
+                {saving ? "Saving…" : form.id ? "Save changes" : "Add service"}
+              </button>
+              <button
+                className="btn outline"
+                onClick={() => {
+                  setForm(empty);
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            {form.id && form.images.length === 0 && <p className="muted">No images yet — the card shows an icon until you add one.</p>}
+          </div>
+        ) : (
+          <div className="panel videoSyncRow">
+            <div>
+              <h3>Services</h3>
+              <p className="muted">These are the cards in “Our services” on the homepage, and the categories for your project photos.</p>
+            </div>
+            <button className="btn light" onClick={addNew}>
+              Add service
+            </button>
+          </div>
+        )}
         <div className="list">
           {services.length ? (
-            services.map((item: any) => (
-              <div className="listItem" key={item.id}>
-                <div>
-                  <b>{item.title}</b>
-                  <span>{item.instagram_hashtags || "No Instagram hashtags configured"}</span>
+            services.map((item: any) => {
+              const imgs = parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [];
+              return (
+                <div className={`listItem${item.active === 0 ? " isHidden" : ""}`} key={item.id}>
+                  <div className="listItemMain">
+                    {imgs[0] ? (
+                      <img className="listThumb" src={imgs[0]} alt="" loading="lazy" />
+                    ) : (
+                      <span className="listThumb listThumbEmpty">
+                        <Upload size={16} />
+                      </span>
+                    )}
+                    <div>
+                      <b>{item.title}</b>
+                      <span>
+                        {imgs.length} image{imgs.length === 1 ? "" : "s"}
+                        {item.include_projects !== 0 ? " + project photos" : ""} · {item.instagram_hashtags || "no hashtags"}
+                        {item.active === 0 ? " · Hidden" : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="listActions">
+                    <button className="btn outline" onClick={() => edit(item)}>
+                      Edit
+                    </button>
+                    <button className="iconDanger" onClick={() => deleteService(item)} aria-label={`Delete ${item.title}`}>
+                      <Trash2 />
+                    </button>
+                  </div>
                 </div>
-                <div className="listActions">
-                  <button
-                    className="btn outline"
-                    onClick={() =>
-                      setForm({
-                        id: item.id,
-                        title: item.title,
-                        instagram_hashtags: item.instagram_hashtags || "",
-                        active: item.active !== false,
-                        sort_order: item.sort_order || 0,
-                      })
-                    }
-                  >
-                    Edit
-                  </button>
-                  <button className="iconDanger" onClick={() => deleteService(item)} aria-label={`Delete ${item.title}`}>
-                    <Trash2 />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
-            <p className="muted">No categories yet — add one above and it'll appear here, editable and deletable.</p>
+            <p className="muted">No services yet. Click “Add service” to create one.</p>
           )}
         </div>
       </div>
@@ -5039,7 +5307,7 @@ function Admin() {
     ["gallery", "Projects & Curation", FolderOpen],
     ["homepage", "Homepage", Settings],
     ["festivals", "Festivals", Sparkles],
-    ["services", "Categories", Settings],
+    ["services", "Services", Settings],
     ["videos", "Videos", Play],
     ["testimonials", "Testimonials", Check],
     ...(user.role === "owner" ? [["admins", "Admins", Shield]] : []),
@@ -5082,7 +5350,7 @@ function Admin() {
                   : tab === "homepage"
                     ? "Homepage"
                     : tab === "services"
-                      ? "Categories"
+                      ? "Services"
                       : tab === "videos"
                         ? "Videos"
                         : tab[0].toUpperCase() + tab.slice(1)}

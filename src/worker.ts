@@ -257,6 +257,8 @@ function finiteNumber(v: any, min: number, max: number, def = 0) {
 function validMediaUrl(v: string) {
   if (!v) return true;
   if (v.startsWith("/media/")) return true;
+  // Static files bundled with the site, e.g. /services/ss-railing.webp
+  if (/^\/[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/.test(v) && !v.includes("..")) return true;
   try {
     const u = new URL(v);
     return u.protocol === "https:" || u.protocol === "http:";
@@ -723,9 +725,7 @@ function getActiveFestivalKey(now: Date = istNow(), movableDates: Record<string,
 app.get("/api/public", async (c) => {
   await ensureV3Schema(c);
   const [s, v, p, settings, igRow, reviewsData] = await Promise.all([
-    c.env.DB.prepare(
-      "SELECT id,title,description,image_url,active,sort_order,instagram_hashtags FROM services WHERE active=1 ORDER BY sort_order,id",
-    ).all(),
+    c.env.DB.prepare("SELECT * FROM services WHERE active=1 ORDER BY sort_order,id").all(),
     c.env.DB.prepare(
       "SELECT id,title,platform,category,thumbnail_url,media_url,source_url,sort_order FROM videos WHERE active=1 AND platform IN ('upload','instagram') AND media_url IS NOT NULL AND media_url<>'' AND (platform='upload' OR media_url LIKE '/media/%') ORDER BY sort_order,id",
     ).all(),
@@ -1204,7 +1204,9 @@ app.post("/api/admin/upload-url", requireAuth, async (c) => {
     ? `videos/uploads/${day}/${uid()}-${base}.${VIDEO_TYPES[contentType]}`
     : purpose === "video-poster"
       ? `videos/posters/${day}/${uid()}-${base}.webp`
-      : `photos/${day}/${uid()}-${base}.webp`;
+      : purpose === "service-image"
+        ? `services/${day}/${uid()}-${base}.webp`
+        : `photos/${day}/${uid()}-${base}.webp`;
   const exp = Date.now() + (isVideo ? 30 * 60000 : 600000);
   const nonce = uid();
   await c.env.DB.prepare("UPDATE storage_reservations SET key=? WHERE id=?").bind(key, reservationId).run();
@@ -2209,13 +2211,7 @@ app.delete("/api/admin/photos/:id", requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 app.get("/api/admin/services", requireAuth, async (c) =>
-  c.json(
-    (
-      await c.env.DB.prepare(
-        "SELECT id,title,description,image_url,active,sort_order,instagram_hashtags FROM services ORDER BY sort_order,id",
-      ).all()
-    ).results,
-  ),
+  c.json((await c.env.DB.prepare("SELECT * FROM services ORDER BY sort_order,id").all()).results),
 );
 app.post("/api/admin/services", requireAuth, async (c) => {
   let b: any;
@@ -2240,16 +2236,53 @@ app.post("/api/admin/services", requireAuth, async (c) => {
   )
     return c.json({ error: "Service fields are too long" }, 400);
   const id = textField(b.id, 100) || uid();
+  const images: string[] = (Array.isArray(b.images) ? b.images : imageUrl ? [imageUrl] : [])
+    .map((x: any) => textField(x, 2048))
+    .filter((x: string) => x && validMediaUrl(x))
+    .slice(0, 20);
+  const includeProjects = b.include_projects === false ? 0 : 1;
+  const before: any = await c.env.DB.prepare("SELECT * FROM services WHERE id=?").bind(id).first();
   await c.env.DB.prepare(
-    `INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,description=excluded.description,price=excluded.price,image_url=excluded.image_url,active=excluded.active,sort_order=excluded.sort_order,instagram_hashtags=excluded.instagram_hashtags`,
+    `INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags,images,include_projects) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,description=excluded.description,price=excluded.price,image_url=excluded.image_url,active=excluded.active,sort_order=excluded.sort_order,instagram_hashtags=excluded.instagram_hashtags,images=excluded.images,include_projects=excluded.include_projects`,
   )
-    .bind(id, title, description, price, imageUrl, b.active === false ? 0 : 1, sortOrder, instagramHashtags)
+    .bind(
+      id,
+      title,
+      description,
+      price,
+      images[0] || "",
+      b.active === false ? 0 : 1,
+      sortOrder,
+      instagramHashtags,
+      JSON.stringify(images),
+      includeProjects,
+    )
     .run();
+  // Remove uploaded image files that were taken off this service.
+  if (before && c.env.MEDIA) {
+    for (const old of parseImageList(before.images)) {
+      if (!images.includes(old) && old.startsWith("/media/services/")) await c.env.MEDIA.delete(old.slice(7)).catch(() => {});
+    }
+  }
   const me: any = c.get("admin");
   await logActivity(c, me.id, me.name || me.email, `Saved category "${title}"`);
   return c.json({ ok: true, id });
 });
+function parseImageList(v: any): string[] {
+  try {
+    const a = JSON.parse(String(v || "[]"));
+    return Array.isArray(a) ? a.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 app.delete("/api/admin/services/:id", requireAuth, async (c) => {
+  const row: any = await c.env.DB.prepare("SELECT * FROM services WHERE id=?").bind(c.req.param("id")).first();
+  if (row && c.env.MEDIA) {
+    for (const img of parseImageList(row.images)) {
+      if (img.startsWith("/media/services/")) await c.env.MEDIA.delete(img.slice(7)).catch(() => {});
+    }
+  }
   await c.env.DB.prepare("DELETE FROM services WHERE id=?").bind(c.req.param("id")).run();
   const me: any = c.get("admin");
   await logActivity(c, me.id, me.name || me.email, "Deleted a category");
@@ -2706,7 +2739,14 @@ export default {
           : await env.DB.prepare("SELECT id FROM videos WHERE media_url=? OR thumbnail_url=? LIMIT 1")
               .bind("/media/" + n.key, "/media/" + n.key)
               .first();
-        if (photo || video) {
+        const service: any =
+          photo || video
+            ? null
+            : await env.DB.prepare("SELECT id FROM services WHERE instr(images, ?) > 0 LIMIT 1")
+                .bind("/media/" + n.key)
+                .first()
+                .catch(() => null);
+        if (photo || video || service) {
           await env.DB.prepare("DELETE FROM upload_nonces WHERE id=?").bind(n.id).run();
           continue;
         }
