@@ -64,11 +64,15 @@ app.use("*", async (c, next) => {
 });
 const enc = new TextEncoder();
 async function hmac(env: Env, value: string) {
-  if (!(env.SESSION_KEY || env.SESSION_SECRET) || (env.SESSION_KEY || env.SESSION_SECRET).length < 32) throw new Error("SESSION_SECRET is not configured correctly");
-  const k = await crypto.subtle.importKey("raw", enc.encode((env.SESSION_KEY || env.SESSION_SECRET)), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-    "verify",
-  ]);
+  if (!(env.SESSION_KEY || env.SESSION_SECRET) || (env.SESSION_KEY || env.SESSION_SECRET).length < 32)
+    throw new Error("SESSION_SECRET is not configured correctly");
+  const k = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(env.SESSION_KEY || env.SESSION_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
   return crypto.subtle.sign("HMAC", k, enc.encode(value)).then((x) => btoa(String.fromCharCode(...new Uint8Array(x))));
 }
 function b64u(bytes: ArrayBuffer | Uint8Array) {
@@ -83,7 +87,7 @@ function unb64u(s: string) {
   return Uint8Array.from(atob(t + "=".repeat((4 - (t.length % 4)) % 4)), (x) => x.charCodeAt(0));
 }
 async function tokenKey(env: Env, legacy = false) {
-  const secret = legacy || !env.TOKEN_ENCRYPTION_KEY ? (env.SESSION_KEY || env.SESSION_SECRET) : env.TOKEN_ENCRYPTION_KEY!;
+  const secret = legacy || !env.TOKEN_ENCRYPTION_KEY ? env.SESSION_KEY || env.SESSION_SECRET : env.TOKEN_ENCRYPTION_KEY!;
   const digest = await crypto.subtle.digest("SHA-256", enc.encode(secret));
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
@@ -177,7 +181,7 @@ const MAX_PINNED_SLOTS = 5;
 const DEFAULT_GALLERY_CONFIG =
   '{"slots":[{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"},{"type":"category","category":"Other"}],"columns":3}';
 const DEFAULT_ABOUT_TEXT =
-  "Capital UPVC Windows & Doors focuses on custom openings for homes and buildings, combining modern profiles with practical everyday use.\n\nEvery opening is different. We work around the opening, the room, the view and the way the door or window needs to be used — so the result looks at home rather than feeling added on.";
+  "Classic Steel builds SS railings, MS gates and grills, safety doors, roof sheds, aluminium windows and glass work for homes and businesses across Goa.\n\nEvery job is custom work, made to suit your space and your needs — strong structure, beautiful design, finished cleanly and delivered on time.";
 async function hashPassword(p: string) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey("raw", enc.encode(p), "PBKDF2", false, ["deriveBits"]);
@@ -289,7 +293,12 @@ function setupOwnerEmails(env: Env) {
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
 }
+let videoColumnsReady = false;
 async function storageUsed(c: any) {
+  if (!videoColumnsReady) {
+    await ensureVideoFileColumns(c);
+    videoColumnsReady = true;
+  }
   const used: any = await c.env.DB.prepare(
     "SELECT (SELECT COALESCE(SUM(bytes),0) FROM photos WHERE r2_key IS NOT NULL)+(SELECT COALESCE(SUM(bytes),0) FROM videos WHERE thumbnail_url LIKE '/media/%')+(SELECT COALESCE(SUM(file_bytes),0) FROM videos WHERE media_url LIKE '/media/%') bytes",
   ).first();
@@ -350,10 +359,13 @@ function matchedCategories(caption: string, serviceRows: any[], aliasRows: any[]
   }
   if (serviceMatches.size) return Array.from(serviceMatches);
   const legacy: [string, string[]][] = [
-    ["Windows", ["window", "casement"]],
-    ["Doors", ["door"]],
-    ["Wood-finish", ["wood"]],
-    ["Large openings", ["largeopening", "facade", "glazing"]],
+    ["SS Railing", ["railing", "ssrailing"]],
+    ["MS Gate & Grill", ["gate", "grill"]],
+    ["Safety Door", ["safetydoor", "door"]],
+    ["Roof Shed", ["roofshed", "shed"]],
+    ["Aluminium Windows", ["window", "aluminium"]],
+    ["Glass Work", ["glass"]],
+    ["Fabrication", ["fabrication", "fabricator", "welding"]],
   ];
   const legacyMatches = new Set<string>();
   for (const [name, aliases] of legacy) {
@@ -437,7 +449,7 @@ app.get("/api/instagram/connect-link/:token", async (c) => {
   if (!row || row.used_at || Number(row.expires_at) <= Date.now())
     return c.html("<h2>Connection link expired</h2><p>Please ask the website admin to create a new Instagram connection link.</p>", 410);
   return c.html(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Instagram · Capital UPVC</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080c0f;color:#f5f7f8;font-family:Arial,sans-serif}.card{width:min(460px,88vw);padding:32px;border:1px solid #273137;border-radius:20px;background:#11181d;text-align:center}.eyebrow{color:#e5c38d;font-size:11px;letter-spacing:.2em;font-weight:800}.card h1{font:600 36px Georgia,serif;margin:12px 0}.card p{color:#9da8ae;line-height:1.6}.btn{display:inline-block;margin-top:12px;padding:13px 20px;border-radius:999px;background:#f5f7f8;color:#080c0f;text-decoration:none;font-weight:700;border:0;cursor:pointer}</style></head><body><main class="card"><div class="eyebrow">CAPITAL UPVC</div><h1>Connect Instagram</h1><p>This secure link lets you authorize the Capital UPVC website to access your Instagram media. You will log in to Instagram yourself. Your password is never shared with the website.</p><form method="post" action="/api/instagram/connect-link/${token}/start" target="_blank" rel="noopener noreferrer"><button class="btn" type="submit">Continue in Browser</button></form><p>This link expires in 30 minutes and is consumed only after Instagram is connected successfully. Instagram will open in a new browser tab so you can complete the authorization on the web. If you cancel or go back, you can try again with the same link while it is still valid.</p></main></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Instagram · Classic Steel</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080c0f;color:#f5f7f8;font-family:Arial,sans-serif}.card{width:min(460px,88vw);padding:32px;border:1px solid #273137;border-radius:20px;background:#11181d;text-align:center}.eyebrow{color:#e5c38d;font-size:11px;letter-spacing:.2em;font-weight:800}.card h1{font:600 36px Georgia,serif;margin:12px 0}.card p{color:#9da8ae;line-height:1.6}.btn{display:inline-block;margin-top:12px;padding:13px 20px;border-radius:999px;background:#f5f7f8;color:#080c0f;text-decoration:none;font-weight:700;border:0;cursor:pointer}</style></head><body><main class="card"><div class="eyebrow">CLASSIC STEEL</div><h1>Connect Instagram</h1><p>This secure link lets you authorize the Classic Steel website to access your Instagram media. You will log in to Instagram yourself. Your password is never shared with the website.</p><form method="post" action="/api/instagram/connect-link/${token}/start" target="_blank" rel="noopener noreferrer"><button class="btn" type="submit">Continue in Browser</button></form><p>This link expires in 30 minutes and is consumed only after Instagram is connected successfully. Instagram will open in a new browser tab so you can complete the authorization on the web. If you cancel or go back, you can try again with the same link while it is still valid.</p></main></body></html>`,
   );
 });
 app.post("/api/instagram/connect-link/:token/start", async (c) => {
@@ -658,7 +670,7 @@ const FESTIVAL_COPY: Record<string, { kicker: string; title: string; copy: strin
   anniversary: {
     kicker: "WISHING YOU",
     title: "Celebrating Another Year!",
-    copy: "Today marks another year of Capital UPVC Windows & Doors \u2014 thank you to every home and business that trusted us with their openings. Here\u2019s to many more.",
+    copy: "Today marks another year of Classic Steel \u2014 thank you to every home and business that trusted us with their work. Here\u2019s to many more.",
     accent: "#c9a15f",
   },
 };
@@ -678,7 +690,7 @@ function anniversaryCopy(now: Date = istNow()) {
   return {
     kicker: "WISHING YOU",
     title: `Happy ${ordinal(years)} Anniversary!`,
-    copy: `Today marks ${years} years of Capital UPVC Windows & Doors \u2014 thank you to every home and business that trusted us with their openings. Here's to many more.`,
+    copy: `Today marks ${years} years of Classic Steel \u2014 thank you to every home and business that trusted us with their work. Here's to many more.`,
     accent: "#c9a15f",
   };
 }
@@ -792,7 +804,7 @@ async function setupSignature(id: string, env: Env) {
   return hmac(env, `setup:${id}`);
 }
 function emailWrapper(bodyHtml: string) {
-  return `<div style="background:#f5f1e8;padding:32px 16px;font-family:Arial,sans-serif"><div style="max-width:520px;margin:auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5ddd0"><div style="background:#14181b;padding:26px 32px;text-align:center"><div style="color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:14px;letter-spacing:3px;text-transform:uppercase">Capital UPVC Windows &amp; Doors</div></div><div style="padding:32px;color:#2b2f33;font-size:15px;line-height:1.6">${bodyHtml}</div><div style="padding:16px 32px;background:#f8f5ef;color:#8a8478;font-size:12px;text-align:center">Capital UPVC Windows &amp; Doors · Majorda, Goa</div></div></div>`;
+  return `<div style="background:#f5f1e8;padding:32px 16px;font-family:Arial,sans-serif"><div style="max-width:520px;margin:auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5ddd0"><div style="background:#14181b;padding:26px 32px;text-align:center"><div style="color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:14px;letter-spacing:3px;text-transform:uppercase">Classic Steel</div></div><div style="padding:32px;color:#2b2f33;font-size:15px;line-height:1.6">${bodyHtml}</div><div style="padding:16px 32px;background:#f8f5ef;color:#8a8478;font-size:12px;text-align:center">Classic Steel · Cuncolim, Goa</div></div></div>`;
 }
 async function sendSetupCode(c: any, email: string, code: string) {
   if (!c.env.RESEND_API_KEY || !c.env.RESEND_FROM_EMAIL)
@@ -806,7 +818,7 @@ async function sendSetupCode(c: any, email: string, code: string) {
     body: JSON.stringify({
       from: c.env.RESEND_FROM_EMAIL,
       to: [email],
-      subject: "Your Capital UPVC admin verification code",
+      subject: "Your Classic Steel admin verification code",
       html: body,
     }),
   });
@@ -819,12 +831,12 @@ async function sendAdminInvitation(c: any, email: string, url: string) {
   if (!c.env.RESEND_API_KEY || !c.env.RESEND_FROM_EMAIL)
     throw new Error("Email invitations are not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the Worker.");
   const body = emailWrapper(
-    `<h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:20px;color:#14181b">You're invited</h2><p style="margin:0 0 22px;color:#5b6167">You've been invited to join the Capital UPVC website admin team. Click below to verify your email and set your own password.</p><div style="text-align:center;margin:26px 0"><a href="${url}" style="display:inline-block;background:#14181b;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.5px">Verify email &amp; create account</a></div><p style="margin:0;color:#8a8478;font-size:13px">This invitation expires in 12 hours. If you didn't expect this, you can safely ignore this email.</p>`,
+    `<h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:20px;color:#14181b">You're invited</h2><p style="margin:0 0 22px;color:#5b6167">You've been invited to join the Classic Steel website admin team. Click below to verify your email and set your own password.</p><div style="text-align:center;margin:26px 0"><a href="${url}" style="display:inline-block;background:#14181b;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.5px">Verify email &amp; create account</a></div><p style="margin:0;color:#8a8478;font-size:13px">This invitation expires in 12 hours. If you didn't expect this, you can safely ignore this email.</p>`,
   );
   const payload = {
     from: c.env.RESEND_FROM_EMAIL,
     to: [email],
-    subject: "You've been invited to Capital UPVC Admin",
+    subject: "You've been invited to Classic Steel Admin",
     html: body,
   };
   for (let attempt = 0; attempt < 3; attempt++) {

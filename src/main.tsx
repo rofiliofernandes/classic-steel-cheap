@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  AppWindow,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -9,6 +10,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  DoorOpen,
+  Fence,
+  Grid3x3,
   FolderOpen,
   Home as HomeIcon,
   Instagram,
@@ -23,9 +27,12 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Square,
   Sun,
   Trash2,
   Upload,
+  Warehouse,
+  Wrench,
   X,
 } from "lucide-react";
 import gsap from "gsap";
@@ -33,23 +40,22 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import "./style.css";
 gsap.registerPlugin(ScrollTrigger);
 
-const BRAND = "Capital UPVC Windows & Doors";
-const PHONES = ["7048235723", "7310886726", "9259705828"];
-const WA = "https://wa.me/917048235723";
-const WA_QUOTE_TEXT = "Hello Capital UPVC Windows & Doors, I would like a quote.";
+const BRAND = "Classic Steel";
+const PHONES = ["8449243465"];
+const WA = "https://wa.me/918449243465";
+const WA_QUOTE_TEXT = "Hello Classic Steel, I would like a quote.";
 const WA_QUOTE = WA + "?text=" + encodeURIComponent(WA_QUOTE_TEXT);
-const MAPS = "https://maps.app.goo.gl/MStEk8sBR9QoNXGu7";
-const MAP_EMBED = "https://www.google.com/maps?q=Majorda%2C%20Goa&output=embed";
-const LOCATION = "Majorda, Goa";
+const MAPS = "https://maps.app.goo.gl/AAHkDogEJLhGy6aZ8";
+const MAP_EMBED = "https://www.google.com/maps?q=Panzorconi%2C%20Cuncolim%2C%20Goa%20403703&output=embed";
+const LOCATION = "Panzorconi, Cuncolim, Goa – 403703";
 const FALLBACK = [
-  "/projects/project-06.webp",
-  "/projects/project-31.webp",
-  "/projects/project-16.webp",
-  "/projects/project-26.webp",
-  "/projects/project-29.webp",
-  "/projects/project-15.webp",
-  "/projects/project-20.webp",
-  "/projects/project-17.webp",
+  "/services/ss-railing.webp",
+  "/services/ms-gate-grill.webp",
+  "/services/roof-shed.webp",
+  "/services/glass-work.webp",
+  "/services/safety-door.webp",
+  "/services/aluminium-windows.webp",
+  "/services/railing-stairs.webp",
 ];
 function formatPhone(p: string) {
   return p.length === 10 ? `${p.slice(0, 5)} ${p.slice(5)}` : p;
@@ -70,7 +76,7 @@ function useDocumentMeta(title: string, description: string) {
     m.setAttribute("content", description);
   }, [title, description]);
 }
-const CATS = ["Windows", "Sliding", "Doors", "Wood-finish", "Large openings"];
+const CATS = ["SS Railing", "MS Gate & Grill", "Safety Door", "Roof Shed", "Aluminium Windows", "Glass Work", "Fabrication"];
 
 async function api(path: string, opt: any = {}) {
   const r = await fetch(path, { ...opt, headers: { "Content-Type": "application/json", ...(opt.headers || {}) } });
@@ -274,13 +280,8 @@ function Nav({ page = "home" }: { page?: string }) {
   return (
     <header className={`siteHeader${hidden ? " headerHidden" : ""}`}>
       <div className="referenceWrap nav">
-        <a className="brandLogo" href="/" onClick={() => setOpen(false)} aria-label="Capital UPVC home">
-          <img className="logoLight" src="/logo.webp" alt="Capital UPVC" />
-          <img className="logoDark" src="/logo.webp" alt="Capital UPVC" />
-          <div className="brandText">
-            <b>CAPITAL UPVC</b>
-            <span>WINDOWS &amp; DOORS</span>
-          </div>
+        <a className="brandLogo brandWordmark" href="/" onClick={() => setOpen(false)} aria-label="Classic Steel home">
+          <img src="/logo.svg" alt="Classic Steel — SS Railing & MS Fabrication" />
         </a>
         <nav className="desktopNav">
           {links.map(([label, href, key]) => (
@@ -343,7 +344,7 @@ function DemoPhotos() {
     id: "demo" + i,
     image_url: image,
     category: CATS[i % CATS.length],
-    caption: "Capital UPVC project",
+    caption: "Classic Steel project",
   }));
 }
 function groupPhotos(photos: any[]) {
@@ -463,7 +464,7 @@ function GalleryTile({
         <SmartCrop
           key={p.id || i}
           photo={p}
-          alt={p.caption || "Capital UPVC project"}
+          alt={p.caption || "Classic Steel project"}
           className={`galleryTileImg${i === idx ? " active" : ""}`}
         />
       ))}
@@ -524,7 +525,7 @@ function Lightbox({ photo, onClose }: { photo: any; onClose: () => void }) {
         <X size={24} />
       </button>
       <figure onClick={(e) => e.stopPropagation()}>
-        <img src={photo.image_url || photo.image} alt={photo.caption || "Capital UPVC project"} />
+        <img src={photo.image_url || photo.image} alt={photo.caption || "Classic Steel project"} />
         {(photo.caption || photo.category) && (
           <figcaption>
             <b>{photo.caption}</b>
@@ -564,12 +565,12 @@ function ImageGrid({ photos, limit = 15 }: { photos: any[]; limit?: number }) {
 function HeroCopy() {
   return (
     <div className="heroCenter">
-      <small>UPVC WINDOWS &amp; DOORS</small>
+      <small>SS RAILING &amp; MS FABRICATION</small>
       <h1>
-        Bring more light, comfort &amp; style <i>into your space.</i>
+        Your vision, <i>our work.</i>
       </h1>
       <p className="heroLead">
-        Custom UPVC window and door solutions for homes, offices and buildings — with clean profiles and a modern finish.
+        SS railings, MS gates &amp; grills, safety doors, roof sheds, aluminium windows and glass work — strong structure, beautiful design.
       </p>
       <div className="heroActions">
         <a className="referenceButton" href="/contact" onClick={() => trackClick("quote_hero")}>
@@ -579,7 +580,7 @@ function HeroCopy() {
           WHATSAPP US
         </a>
       </div>
-      <p className="heroNote">✓ Custom sizes &nbsp; ✓ Modern designs &nbsp; ✓ Enquiry support</p>
+      <p className="heroNote">✓ Quality work &nbsp; ✓ Customer satisfaction &nbsp; ✓ On-time delivery</p>
     </div>
   );
 }
@@ -643,7 +644,7 @@ function Hero({ data }: { data: any }) {
       <section className="referenceHero heroScrollPin" ref={pinRef as any}>
         <div className="heroScrollLayers">
           <div className="heroScrollLayer" style={{ zIndex: 0 }}>
-            <SmartCrop photo={base} alt="Capital UPVC installation" eager hero className="heroScrollImg" />
+            <SmartCrop photo={base} alt="Classic Steel work" eager hero className="heroScrollImg" />
           </div>
           {maskedLayers.map((p: any, idx: number) => (
             <div
@@ -654,7 +655,7 @@ function Hero({ data }: { data: any }) {
                 layerRefs.current[idx] = el;
               }}
             >
-              <SmartCrop photo={p} alt="Capital UPVC installation" eager={idx === 0} hero className="heroScrollImg" />
+              <SmartCrop photo={p} alt="Classic Steel work" eager={idx === 0} hero className="heroScrollImg" />
             </div>
           ))}
         </div>
@@ -682,7 +683,7 @@ function Hero({ data }: { data: any }) {
           <SmartCrop
             key={p.image_url + n}
             photo={p}
-            alt="Capital UPVC installation"
+            alt="Classic Steel work"
             eager={n === 0}
             hero
             className={`heroSlide ${n === i ? "active" : ""}`}
@@ -816,14 +817,14 @@ function FestivalBannerVisual({ f }: { f: any }) {
           <source media="(max-width:700px)" srcSet={mobileUrl} />
           <img
             src={f.photo.image_url}
-            alt={`${f.title} — Capital UPVC`}
+            alt={`${f.title} — Classic Steel`}
             style={{ objectPosition: `${f.photo.focal_x ?? 50}% ${f.photo.focal_y ?? 50}%` }}
           />
         </picture>
       </div>
       {f.key === "anniversary" && <AnniversaryConfetti scrollReveal={!!f.scrollReveal} />}
       <div className="festivalBannerMsg">
-        <div className="festivalBannerBrand">CAPITAL UPVC WINDOWS &amp; DOORS</div>
+        <div className="festivalBannerBrand">CLASSIC STEEL</div>
         <p className="festivalBannerKicker">{f.kicker}</p>
         <h2>{f.title}</h2>
         <div className="festivalBannerOrnament">
@@ -832,7 +833,7 @@ function FestivalBannerVisual({ f }: { f: any }) {
           <i></i>
         </div>
         <p className="festivalBannerCopy">{f.copy}</p>
-        <p className="festivalBannerSignoff">With warm wishes, Capital UPVC Windows &amp; Doors</p>
+        <p className="festivalBannerSignoff">With warm wishes, Classic Steel</p>
       </div>
     </section>
   );
@@ -884,14 +885,14 @@ function RevealImage({
   if (mode === "curtain")
     return (
       <div className="introReveal introReveal-curtain" style={{ "--reveal-duration": duration } as any}>
-        <SmartCrop photo={photo} alt="Capital UPVC installation" className="introRevealImg introRevealCurtainImg" />
+        <SmartCrop photo={photo} alt="Classic Steel work" className="introRevealImg introRevealCurtainImg" />
         <div className="introRevealCurtainPanel" />
       </div>
     );
   if (mode === "sweep")
     return (
       <div className="introReveal introReveal-sweep" style={{ "--reveal-duration": duration } as any}>
-        <SmartCrop photo={photo} alt="Capital UPVC installation" className="introRevealImg introRevealSweepImg" />
+        <SmartCrop photo={photo} alt="Classic Steel work" className="introRevealImg introRevealSweepImg" />
         <div className="introRevealSweepBar" />
       </div>
     );
@@ -923,7 +924,7 @@ function RevealImage({
     );
   return (
     <div className="introReveal introReveal-slice" style={{ "--reveal-duration": duration } as any}>
-      <SmartCrop photo={photo} alt="Capital UPVC installation" className="introRevealImg" />
+      <SmartCrop photo={photo} alt="Classic Steel work" className="introRevealImg" />
       <div className="introRevealSlices">
         <span />
         <span />
@@ -942,7 +943,7 @@ function About({ data }: { data: any }) {
     : data.homepage?.aboutPhoto
       ? [data.homepage.aboutPhoto]
       : null;
-  const items = source && source.length ? source.slice(0, 8) : data.loaded ? [{ image_url: "/projects/project-31.webp" }] : [];
+  const items = source && source.length ? source.slice(0, 8) : data.loaded ? [{ image_url: "/services/railing-stairs.webp" }] : [];
   const [i, setI] = useState(0);
   useEffect(() => {
     setI(0);
@@ -956,7 +957,7 @@ function About({ data }: { data: any }) {
   const duration = stripCfg.transition === "slow" ? "1.2s" : stripCfg.transition === "fast" ? "0.55s" : "0.85s";
   const aboutText = String(
     data.homepage?.about?.text ||
-      "Capital UPVC Windows & Doors focuses on custom openings for homes and buildings, combining modern profiles with practical everyday use.",
+      "Classic Steel builds SS railings, MS gates and grills, safety doors, roof sheds, aluminium windows and glass work for homes and businesses across Goa.",
   )
     .split(/\n{2,}/)
     .map((s: string) => s.trim())
@@ -972,7 +973,7 @@ function About({ data }: { data: any }) {
               <SmartCrop
                 key={(p.id || p.image_url) + n}
                 photo={p}
-                alt={p.caption || "Capital UPVC installation"}
+                alt={p.caption || "Classic Steel work"}
                 className={`introImageSlide${n === i ? " active" : ""}`}
                 style={{ transitionDuration: duration }}
               />
@@ -980,27 +981,27 @@ function About({ data }: { data: any }) {
           )}
         </div>
         <div className="introCopy">
-          <small>WHY CAPITAL UPVC</small>
+          <small>WHY CLASSIC STEEL</small>
           <h2>
-            Made around the way
+            Strong structure,
             <br />
-            <i>you use your space.</i>
+            <i>beautiful design.</i>
           </h2>
           {aboutText.map((p: string, idx: number) => (
             <p key={idx}>{p}</p>
           ))}
           <ul className="featureList">
             <li>
-              <Check size={16} /> <b>Made to measure</b> — solutions planned around the opening.
+              <Check size={16} /> <b>Custom work</b> — made as per your needs and your space.
             </li>
             <li>
-              <Check size={16} /> <b>Clean modern profiles</b> — a neat finish inside and out.
+              <Check size={16} /> <b>Strong &amp; durable</b> — quality steel and solid fabrication.
             </li>
             <li>
-              <Check size={16} /> <b>Multiple styles</b> — windows, doors, sliding and wood-look options.
+              <Check size={16} /> <b>Clean, premium finish</b> — elegant looks that last.
             </li>
             <li>
-              <Check size={16} /> <b>Direct enquiry</b> — call or WhatsApp for a quote.
+              <Check size={16} /> <b>On-time delivery</b> — call or WhatsApp for a quote.
             </li>
           </ul>
           <a className="referenceButton dark" href="/contact">
@@ -1035,19 +1036,63 @@ function OurGallery({ data }: { data: any }) {
 const DEFAULT_RANGE = [
   {
     id: "r1",
-    title: "Windows",
-    description: "Casement and fixed UPVC windows with clean profiles, tailored to each opening.",
-    image_url: "/product-1.webp",
+    title: "SS Railing",
+    description: "Modern, durable and elegant stainless-steel railings for stairs, balconies and terraces.",
+    image_url: "/services/ss-railing.webp",
   },
   {
     id: "r2",
-    title: "Sliding",
-    description: "Space-efficient sliding systems for wider views and openings.",
-    image_url: "/product-2.webp",
+    title: "MS Gate & Grill",
+    description: "Strong, secure and stylish gates and window grills.",
+    image_url: "/services/ms-gate-grill.webp",
   },
-  { id: "r3", title: "Doors", description: "Practical door systems designed for everyday movement.", image_url: "/product-3.webp" },
-  { id: "r4", title: "Wood-finish", description: "A warmer visual character with a wood-inspired finish.", image_url: "/product-4.webp" },
+  { id: "r3", title: "Safety Door", description: "Protection and peace of mind for your home.", image_url: "/services/safety-door.webp" },
+  {
+    id: "r4",
+    title: "Roof Shed",
+    description: "Weather-proof, long-lasting sheds for parking, terraces and courtyards.",
+    image_url: "/services/roof-shed.webp",
+  },
+  {
+    id: "r5",
+    title: "Aluminium Windows",
+    description: "Light, stylish and modern aluminium windows.",
+    image_url: "/services/aluminium-windows.webp",
+  },
+  {
+    id: "r6",
+    title: "Glass Work",
+    description: "Clean look, premium finish — glass railings, partitions and more.",
+    image_url: "/services/glass-work.webp",
+  },
+  {
+    id: "r7",
+    title: "Fabrication",
+    description: "All types of fabrication — custom work as per your needs.",
+    image_url: "/services/railing-stairs.webp",
+  },
 ];
+function ServiceIcon({ title }: { title: string }) {
+  const t = String(title || "").toLowerCase();
+  const I = t.includes("rail")
+    ? Fence
+    : t.includes("gate") || t.includes("grill")
+      ? Grid3x3
+      : t.includes("door")
+        ? DoorOpen
+        : t.includes("shed") || t.includes("roof")
+          ? Warehouse
+          : t.includes("window")
+            ? AppWindow
+            : t.includes("glass")
+              ? Square
+              : Wrench;
+  return (
+    <div className="serviceIconTile" aria-hidden="true">
+      <I size={44} strokeWidth={1.6} />
+    </div>
+  );
+}
 function Services({ services }: { services: any[] }) {
   const list = services.length ? services : DEFAULT_RANGE;
   return (
@@ -1055,14 +1100,14 @@ function Services({ services }: { services: any[] }) {
       <div className="referenceWrap">
         <div className="referenceSectionHead centerOnly">
           <div>
-            <small>OUR RANGE</small>
-            <h2>Windows &amp; doors for modern spaces</h2>
+            <small>OUR SERVICES</small>
+            <h2>SS railing &amp; MS fabrication</h2>
           </div>
         </div>
         <div className="servicesGrid">
           {list.map((s: any) => (
             <article key={s.id}>
-              <img src={s.image_url || "/product-1.webp"} alt={s.title} loading="lazy" />
+              {s.image_url ? <img src={s.image_url} alt={s.title} loading="lazy" /> : <ServiceIcon title={s.title} />}
               <div>
                 <h3>{s.title}</h3>
                 <p>{s.description}</p>
@@ -1310,9 +1355,9 @@ function QuoteBand() {
         <div>
           <small>HAVE A PROJECT IN MIND?</small>
           <h2>
-            Show us the opening. <i>We'll help you choose.</i>
+            Let's build something <i>great together.</i>
           </h2>
-          <p>WhatsApp a photo of the opening with the approximate size and the style you like — we'll guide you from there.</p>
+          <p>WhatsApp a photo of the site with the approximate size and the design you like — we'll guide you from there.</p>
         </div>
         <div className="quoteBandActions">
           <a className="referenceButton dark" href="/contact">
@@ -1362,7 +1407,7 @@ function WhatsAppWidget() {
               </button>
             </div>
             <div className="waPanelBody">
-              <p>Hi! Send us a photo of your opening on WhatsApp for a quick quote.</p>
+              <p>Hi! Send us a photo of your site on WhatsApp for a quick quote.</p>
               <a href={WA_QUOTE} target="_blank" rel="noreferrer" onClick={() => trackClick("whatsapp_widget_chat")}>
                 Open chat <ArrowRight size={20} />
               </a>
@@ -1392,7 +1437,7 @@ function Footer({ data }: { data: any }) {
       <div className="referenceWrap footerInfo">
         <div className="footerInfoCol">
           <h3>About Us</h3>
-          <p>Custom UPVC windows, doors and glazed solutions designed around your space.</p>
+          <p>SS railing &amp; MS fabrication — strong structure, beautiful design.</p>
         </div>
         <div className="footerInfoCol">
           <h3>Talk to us</h3>
@@ -1421,9 +1466,7 @@ function Footer({ data }: { data: any }) {
       </div>
       <div className="referenceWrap footerBottomNew">
         <div className="footerBrand">
-          <img src="/logo.webp" alt="Capital UPVC" />
-          <span>CAPITAL UPVC</span>
-          <small>WINDOWS &amp; DOORS</small>
+          <img className="footerWordmark" src="/logo.svg" alt="Classic Steel" />
         </div>
         <nav className="footerNav">
           <a href="/">Home</a>
@@ -1444,13 +1487,13 @@ function Footer({ data }: { data: any }) {
         </div>
       </div>
       <div className="footerMapFull">
-        <iframe title="Capital UPVC location" src={MAP_EMBED} loading="lazy" />
+        <iframe title="Classic Steel location" src={MAP_EMBED} loading="lazy" />
       </div>
       <div className="referenceWrap footerCopyright">
         <span>
           © {new Date().getFullYear()} {BRAND}. All rights reserved.
         </span>
-        <span>Windows • Doors • Custom solutions</span>
+        <span>Strong Structure • Beautiful Design</span>
       </div>
     </footer>
   );
@@ -1459,8 +1502,8 @@ function Footer({ data }: { data: any }) {
 function Home() {
   const data = usePublicData();
   useDocumentMeta(
-    "Capital UPVC Windows & Doors | UPVC Windows and Doors in Majorda, Goa",
-    "Capital UPVC Windows & Doors — custom UPVC windows, sliding systems, doors and glazed solutions for homes and buildings in Goa.",
+    "Classic Steel | SS Railing & MS Fabrication in Cuncolim, Goa",
+    "Classic Steel — SS railings, MS gates & grills, safety doors, roof sheds, aluminium windows, glass work and all types of fabrication in Cuncolim, Goa.",
   );
   return (
     <>
@@ -1483,8 +1526,8 @@ function Home() {
 function Gallery() {
   const data = usePublicData();
   useDocumentMeta(
-    "Projects | Capital UPVC Windows & Doors, Goa",
-    "Browse completed Capital UPVC window, door, sliding, wood-finish and large glazed-opening installations in Goa.",
+    "Projects | Classic Steel, Goa",
+    "Browse completed Classic Steel railing, gate, grill, door, shed, window and glass work in Goa.",
   );
   const photos = data.photos || [];
   const order = (c: string) => (CATS.indexOf(c) === -1 ? 99 : CATS.indexOf(c));
@@ -1500,7 +1543,7 @@ function Gallery() {
       <section className="galleryPageHead">
         <small>PROJECTS</small>
         <h1>Real work. Different spaces.</h1>
-        <p>Browse Capital UPVC windows, doors, wood-finish openings and other glazed work. Tap any image to view it larger.</p>
+        <p>Browse our railings, gates, grills, doors, sheds, windows and glass work. Tap any image to view it larger.</p>
       </section>
       <div className="galleryFilter">
         {(cats as string[]).map((c) => (
@@ -1518,22 +1561,33 @@ function Gallery() {
   );
 }
 
-const REQUIREMENTS = ["Windows", "Sliding windows / doors", "Openable doors", "Wooden texture", "Large openings", "Not sure — need advice"];
+const REQUIREMENTS = [
+  "SS Railing",
+  "MS Gate & Grill",
+  "Safety Door",
+  "Roof Shed",
+  "Aluminium Windows",
+  "Glass Work",
+  "Other fabrication",
+  "Not sure — need advice",
+];
 function requirementFromParam(v: string | null) {
   const s = String(v || "").toLowerCase();
   if (!s) return REQUIREMENTS[0];
-  if (s.includes("slid")) return "Sliding windows / doors";
-  if (s.includes("door")) return "Openable doors";
-  if (s.includes("wood")) return "Wooden texture";
-  if (s.includes("large") || s.includes("opening")) return "Large openings";
-  if (s.includes("window") || s.includes("casement")) return "Windows";
+  if (s.includes("rail")) return "SS Railing";
+  if (s.includes("gate") || s.includes("grill")) return "MS Gate & Grill";
+  if (s.includes("door")) return "Safety Door";
+  if (s.includes("shed") || s.includes("roof")) return "Roof Shed";
+  if (s.includes("window")) return "Aluminium Windows";
+  if (s.includes("glass")) return "Glass Work";
+  if (s.includes("fabric")) return "Other fabrication";
   return REQUIREMENTS[0];
 }
 function ContactPage() {
   const data = usePublicData();
   useDocumentMeta(
-    "Contact | Capital UPVC Windows & Doors, Majorda Goa",
-    "Call, WhatsApp or send an enquiry to Capital UPVC Windows & Doors in Majorda, Goa for UPVC windows, doors and glazed solutions.",
+    "Contact | Classic Steel, Cuncolim Goa",
+    "Call, WhatsApp or send an enquiry to Classic Steel in Cuncolim, Goa for SS railings, MS gates & grills, safety doors, roof sheds and fabrication.",
   );
   const [form, setForm] = useState(() => ({
     name: "",
@@ -1544,7 +1598,7 @@ function ContactPage() {
   const [sent, setSent] = useState(false);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const message = `Hello Capital UPVC Windows & Doors,\n\nName: ${form.name}\nPhone: ${form.phone}\nRequirement: ${form.service}\nDetails: ${form.details}`;
+    const message = `Hello Classic Steel,\n\nName: ${form.name}\nPhone: ${form.phone}\nRequirement: ${form.service}\nDetails: ${form.details}`;
     trackClick("whatsapp_contact_form");
     window.open(`${WA}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     setSent(true);
@@ -1563,7 +1617,7 @@ function ContactPage() {
             <small>DIRECT CONTACT</small>
             <h2>Let's talk about your project.</h2>
             <div className="upvcContactItem">
-              <span>WhatsApp / Primary</span>
+              <span>Phone / WhatsApp</span>
               <a href={WA} target="_blank" rel="noreferrer" onClick={() => trackClick("whatsapp_contact_card")}>
                 {formatPhone(PHONES[0])}
               </a>
@@ -1583,7 +1637,7 @@ function ContactPage() {
                 <MapPin size={15} /> View on Google Maps <ArrowRight size={13} />
               </a>
             </div>
-            <p className="upvcNote">For the quickest enquiry, WhatsApp a photo of the opening and a short description of what you want.</p>
+            <p className="upvcNote">For the quickest enquiry, WhatsApp a photo of the site and a short description of what you want.</p>
           </div>
           <div className="upvcContactCard">
             <small>ENQUIRY FORM</small>
@@ -1625,7 +1679,7 @@ function ContactPage() {
                 <textarea
                   className="input"
                   rows={5}
-                  placeholder="Tell us about the opening, approximate size, location, preferred style, etc."
+                  placeholder="Tell us what you need — approximate size, location, preferred design, etc."
                   value={form.details}
                   onChange={(e) => setForm({ ...form, details: e.target.value })}
                   required
@@ -1643,7 +1697,7 @@ function ContactPage() {
           </div>
         </section>
         <section className="referenceWrap upvcContactMap">
-          <iframe title="Capital UPVC location — Majorda, Goa" src={MAP_EMBED} loading="lazy" />
+          <iframe title="Classic Steel location — Cuncolim, Goa" src={MAP_EMBED} loading="lazy" />
         </section>
       </main>
       <Footer data={data} />
@@ -3026,7 +3080,7 @@ function StripAdmin({ photos, initial, refresh }: { photos: any[]; initial: any;
   );
 }
 function Photos({ photos, services, refresh }: { photos: any[]; services: any[]; refresh: () => void }) {
-  const [category, setCategory] = useState(services[0]?.title || "Windows"),
+  const [category, setCategory] = useState(services[0]?.title || "SS Railing"),
     [link, setLink] = useState(""),
     [files, setFiles] = useState<File[]>([]),
     [caption, setCaption] = useState(""),
@@ -3200,7 +3254,7 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
               className="input"
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="e.g. Sliding windows, Margao apartment"
+              placeholder="e.g. SS staircase railing, Margao villa"
             />
           </label>
           <label className="filePick">
@@ -3681,7 +3735,7 @@ function ServicesAdmin({ services, refresh }: any) {
           />
           <input
             className="input"
-            placeholder="#slidingwindow, #upvcwindows (optional)"
+            placeholder="#ssrailing, #staircaserailing (optional)"
             value={form.instagram_hashtags}
             onChange={(e) => setForm({ ...form, instagram_hashtags: e.target.value })}
           />
@@ -4005,7 +4059,7 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
             className="input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title, e.g. Sliding window installation"
+            placeholder="Title, e.g. SS railing installation"
             disabled={!!busy}
           />
           <select className="input" value={category || cats[0]} onChange={(e) => setCategory(e.target.value)} disabled={!!busy}>
@@ -4348,7 +4402,7 @@ function AdminSetup() {
       <div className="login">
         <form className="panel" onSubmit={run}>
           <small>FIRST-TIME SETUP</small>
-          <h2>Capital UPVC</h2>
+          <h2>Classic Steel</h2>
           {step === "email" && (
             <>
               <p className="muted">We'll send a verification code before creating the Owner account.</p>
@@ -4460,7 +4514,7 @@ function AdminInviteSetup() {
       <div className="login">
         <div className="panel inviteSetupPanel">
           <small>ADMIN ACCOUNT READY</small>
-          <h2>Welcome to Capital UPVC</h2>
+          <h2>Welcome to Classic Steel</h2>
           <p className="muted">Your email has been verified and your Admin account is ready.</p>
           <a className="btn light" href="/admin">
             Go to Admin login
@@ -4946,7 +5000,7 @@ function Admin() {
             }}
           >
             <small>PRIVATE ADMIN</small>
-            <h2>Capital UPVC</h2>
+            <h2>Classic Steel</h2>
             <input
               className="input loginInput"
               autoComplete="username"
@@ -4996,7 +5050,7 @@ function Admin() {
       <div className="admin">
         <aside>
           <a className="brand" href="/">
-            Capital UPVC <span>Admin</span>
+            Classic Steel <span>Admin</span>
           </a>
           {tabs.map(([k, n, I]) => (
             <button className={tab === k ? "active" : ""} onClick={() => setTab(k)} key={k}>
@@ -5057,7 +5111,7 @@ function Admin() {
     </>
   );
 }
-// Optional: set these once your domains are live (e.g. "capitalupvc.com" and "admin.capitalupvc.com").
+// Optional: set these once your domains are live (e.g. "classicsteel.in" and "admin.classicsteel.in").
 // Left empty, the whole site (including /admin) works on any hostname.
 const PUBLIC_HOST = "";
 const ADMIN_HOST_FRONTEND = "";

@@ -1,13 +1,13 @@
-# Capital UPVC Windows & Doors — website
+# Classic Steel — website
 
-Website and private admin panel for Capital UPVC Windows & Doors (Majorda, Goa), running on Cloudflare Workers with D1 (database) and R2 (photo and video storage).
+Website and private admin panel for Classic Steel (Panzorconi, Cuncolim, Goa), running on Cloudflare Workers with D1 (database) and R2 (photo and video storage).
 
 ## What's included
 
 **Public site** (cream / off-white theme, with an optional dark-mode toggle)
-- **Home:** hero slideshow, "Why Capital UPVC", the product range (categories), a curated project gallery, the video carousel, testimonials and a quote band.
+- **Home:** hero slideshow, "Why Classic Steel", the product range (categories), a curated project gallery, the video carousel, testimonials and a quote band.
 - **Projects** (`/projects`): every published photo, with category filters and a full-screen lightbox. Photos posted together can be stacked into one tile.
-- **Contact** (`/contact`): the Capital UPVC enquiry form, which opens WhatsApp with the customer's details already filled in. The page also lists all three phone numbers and the Google Maps location.
+- **Contact** (`/contact`): the Classic Steel enquiry form, which opens WhatsApp with the customer's details already filled in. The page also lists all three phone numbers and the Google Maps location.
 - **Video carousel:** swipe to change video, tap to play or pause, with a progress bar. Every video plays from the site's own storage. None of them are embeds.
 - **Also on every page:** a WhatsApp chat bubble, a back-to-top button, seasonal festival banners (Diwali, Christmas, New Year, etc.) and SEO metadata.
 
@@ -47,7 +47,7 @@ Migration `0038_seed_capital_upvc_content.sql` adds the 32 existing project phot
    ```
 4. In `wrangler.toml`, fill in the following:
    - `ADMIN_HOST`: the hostname where you'll open `/admin`. To start, this can be your `*.workers.dev` hostname or the main domain. **The admin panel and its APIs return 404 until this is set.**
-   - `RESEND_FROM_EMAIL`: for example, `Capital UPVC <admin@yourdomain.com>`, using a domain verified in Resend.
+   - `RESEND_FROM_EMAIL`: for example, `Classic Steel <admin@yourdomain.com>`, using a domain verified in Resend.
    - `INSTAGRAM_APP_ID` and `INSTAGRAM_REDIRECT_URI`: the redirect URI is `https://<ADMIN_HOST>/api/instagram/callback`.
    - `STORAGE_LIMIT_GB`: optional. The default is 10 GB of photos plus videos.
 5. Apply the migrations and deploy:
@@ -56,7 +56,7 @@ Migration `0038_seed_capital_upvc_content.sql` adds the 32 existing project phot
    npm run deploy
    ```
 6. Open `https://<ADMIN_HOST>/admin/setup` and verify the owner email to create the Owner account.
-7. Connect Instagram. In **Projects & Curation**, click **Create client link** and open that link while logged in to the Capital UPVC Instagram account. Then click **Sync now** in the **Videos** tab.
+7. Connect Instagram. In **Projects & Curation**, click **Create client link** and open that link while logged in to the Classic Steel Instagram account. Then click **Sync now** in the **Videos** tab.
 
 Optional: once the domain is live, set `PUBLIC_HOST` and `ADMIN_HOST_FRONTEND` at the bottom of `src/main.tsx` to split the public site and the admin onto separate hostnames (for example, `capitalupvc.com` and `admin.capitalupvc.com`).
 

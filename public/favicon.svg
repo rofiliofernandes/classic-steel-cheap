@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="290" height="290" viewBox="10 10 290 290" role="img" aria-labelledby="title desc">
+  <title id="title">Classic Steel logo</title>
+  <desc id="desc">Classic Steel, SS Railing and MS Fabrication, Strong Structure, Beautiful Design.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#ffd84a"/>
+      <stop offset="0.52" stop-color="#e5a91b"/>
+      <stop offset="1" stop-color="#bd7900"/>
+    </linearGradient>
+    <linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#102f4a"/>
+      <stop offset="1" stop-color="#061d32"/>
+    </linearGradient>
+  </defs>
+
+  <!-- House / fabrication mark -->
+  <path d="M34 119 L151 22 L270 119 L247 119 L151 43 L56 119 Z" fill="url(#navy)"/>
+  <path d="M130 79 h17 v17 h-17z M154 79 h17 v17 h-17z" fill="#0b2942"/>
+  <path d="M130 102 h17 v17 h-17z M154 102 h17 v17 h-17z" fill="#0b2942"/>
+
+  <!-- Interlocking C and S monogram -->
+  <text x="17" y="282" font-family="Arial, Helvetica, sans-serif" font-size="244" font-weight="900" letter-spacing="-22" fill="url(#navy)">C</text>
+  <text x="133" y="282" font-family="Arial, Helvetica, sans-serif" font-size="244" font-weight="900" letter-spacing="-18" fill="url(#gold)">S</text>
+</svg>
