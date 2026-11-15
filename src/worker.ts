@@ -6,6 +6,7 @@ type Env = {
   MEDIA?: R2Bucket;
   ASSETS: Fetcher;
   SESSION_SECRET: string;
+  SESSION_KEY?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
@@ -63,8 +64,8 @@ app.use("*", async (c, next) => {
 });
 const enc = new TextEncoder();
 async function hmac(env: Env, value: string) {
-  if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) throw new Error("SESSION_SECRET is not configured correctly");
-  const k = await crypto.subtle.importKey("raw", enc.encode(env.SESSION_SECRET), { name: "HMAC", hash: "SHA-256" }, false, [
+  if (!(env.SESSION_KEY || env.SESSION_SECRET) || (env.SESSION_KEY || env.SESSION_SECRET).length < 32) throw new Error("SESSION_SECRET is not configured correctly");
+  const k = await crypto.subtle.importKey("raw", enc.encode((env.SESSION_KEY || env.SESSION_SECRET)), { name: "HMAC", hash: "SHA-256" }, false, [
     "sign",
     "verify",
   ]);
@@ -82,7 +83,7 @@ function unb64u(s: string) {
   return Uint8Array.from(atob(t + "=".repeat((4 - (t.length % 4)) % 4)), (x) => x.charCodeAt(0));
 }
 async function tokenKey(env: Env, legacy = false) {
-  const secret = legacy || !env.TOKEN_ENCRYPTION_KEY ? env.SESSION_SECRET : env.TOKEN_ENCRYPTION_KEY!;
+  const secret = legacy || !env.TOKEN_ENCRYPTION_KEY ? (env.SESSION_KEY || env.SESSION_SECRET) : env.TOKEN_ENCRYPTION_KEY!;
   const digest = await crypto.subtle.digest("SHA-256", enc.encode(secret));
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
