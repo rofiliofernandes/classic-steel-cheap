@@ -714,7 +714,6 @@ function getActiveFestivalKey(now: Date = istNow(), movableDates: Record<string,
   const key = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   if (m === 1 && d <= 2) return "newyear";
   if (m === 8 && d === 15) return "independence";
-  if (ANNIVERSARY && m === ANNIVERSARY.month && d === ANNIVERSARY.day) return "anniversary";
   if (m === 12 && d >= 24 && d <= 26) return "christmas";
   for (const k of ["ganesh", "diwali", "eid"]) {
     const range = movableDates[k] || DEFAULT_FESTIVAL_DATES[k];
@@ -1653,7 +1652,7 @@ app.put("/api/admin/homepage/about", requireAuth, async (c) => {
   await logActivity(c, me.id, me.name || me.email, "Changed the About Us photo");
   return c.json({ ok: true });
 });
-const FESTIVAL_KEYS = ["ganesh", "diwali", "christmas", "eid", "newyear", "independence", "anniversary"];
+const FESTIVAL_KEYS = ["ganesh", "diwali", "christmas", "eid", "newyear", "independence"];
 const FESTIVAL_IMAGE_PATHS: Record<string, string> = {
   ganesh: "/festival-ganesh.webp",
   diwali: "/festival-diwali.webp",
@@ -1661,7 +1660,6 @@ const FESTIVAL_IMAGE_PATHS: Record<string, string> = {
   eid: "/festival-eid.webp",
   newyear: "/festival-newyear.webp",
   independence: "/festival-independence.webp",
-  anniversary: "/festival-anniversary.webp",
 };
 const FESTIVAL_IMAGE_PATHS_MOBILE: Record<string, string> = {
   ganesh: "/festival-ganesh-mobile.webp",
@@ -1670,7 +1668,6 @@ const FESTIVAL_IMAGE_PATHS_MOBILE: Record<string, string> = {
   eid: "/festival-eid-mobile.webp",
   newyear: "/festival-newyear-mobile.webp",
   independence: "/festival-independence-mobile.webp",
-  anniversary: "/festival-anniversary-mobile.webp",
 };
 app.get("/api/admin/festivals", requireAuth, async (c) => {
   await ensureV3Schema(c);

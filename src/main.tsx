@@ -696,115 +696,6 @@ function Hero({ data }: { data: any }) {
     </section>
   );
 }
-function AnniversaryConfetti({ scrollReveal }: { scrollReveal: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    let raf = 0,
-      w = 0,
-      h = 0;
-    const parent = canvas.parentElement;
-    const resize = () => {
-      if (!parent) return;
-      const rect = parent.getBoundingClientRect();
-      w = canvas.width = rect.width;
-      h = canvas.height = rect.height;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    const COLORS = ["#e5c38d", "#e2544f", "#f7f4eb", "#c98a8a", "#8aa88f"];
-    type P = {
-      x: number;
-      y: number;
-      r: number;
-      vy: number;
-      rot: number;
-      vrot: number;
-      color: string;
-      rich: boolean;
-      sway: number;
-      swaySpeed: number;
-      t: number;
-    };
-    const make = (rich: boolean): P => ({
-      x: Math.random() * w,
-      y: Math.random() * h - h,
-      r: rich ? 4 + Math.random() * 5 : 2 + Math.random() * 3,
-      vy: rich ? 1.6 + Math.random() * 2.2 : 0.5 + Math.random() * 0.9,
-      rot: Math.random() * 360,
-      vrot: rich ? Math.random() * 6 - 3 : Math.random() * 2 - 1,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      rich,
-      sway: Math.random() * 40 + 20,
-      swaySpeed: 0.5 + Math.random() * 1.2,
-      t: Math.random() * 100,
-    });
-    const simple: P[] = Array.from({ length: 44 }, () => make(false));
-    const rich: P[] = Array.from({ length: 70 }, () => make(true));
-    let scrolling = false;
-    const step = () => {
-      raf = requestAnimationFrame(step);
-      if (!w || !h) return;
-      ctx.clearRect(0, 0, w, h);
-      const active = scrolling && scrollReveal;
-      const list = active ? rich : simple;
-      for (const p of list) {
-        p.t += 0.016 * p.swaySpeed;
-        p.y += p.vy * (active ? 1.6 : 1);
-        p.x += Math.sin(p.t) * (p.sway * 0.016);
-        p.rot += p.vrot;
-        if (p.y - p.r > h) {
-          p.y = -p.r - Math.random() * 40;
-          p.x = Math.random() * w;
-        }
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate((p.rot * Math.PI) / 180);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = active ? 0.9 : 0.6;
-        if (p.rich) {
-          ctx.fillRect(-p.r, -p.r * 0.6, p.r * 2, p.r * 1.2);
-        } else {
-          ctx.beginPath();
-          ctx.arc(0, 0, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-    };
-    step();
-    let scrollTimer: any;
-    const onScroll = () => {
-      scrolling = true;
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        scrolling = false;
-      }, 220);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(e.key)) onScroll();
-    };
-    if (scrollReveal) {
-      window.addEventListener("wheel", onScroll, { passive: true });
-      window.addEventListener("touchmove", onScroll, { passive: true });
-      window.addEventListener("scroll", onScroll, { passive: true, capture: true });
-      window.addEventListener("keydown", onKey);
-    }
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("wheel", onScroll);
-      window.removeEventListener("touchmove", onScroll);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("keydown", onKey);
-      clearTimeout(scrollTimer);
-    };
-  }, [scrollReveal]);
-  return <canvas ref={canvasRef} className="festivalConfettiCanvas" aria-hidden="true" />;
-}
 function FestivalBannerVisual({ f }: { f: any }) {
   const mobileUrl = f.photo.image_url_mobile || f.photo.image_url;
   return (
@@ -822,7 +713,6 @@ function FestivalBannerVisual({ f }: { f: any }) {
           />
         </picture>
       </div>
-      {f.key === "anniversary" && <AnniversaryConfetti scrollReveal={!!f.scrollReveal} />}
       <div className="festivalBannerMsg">
         <div className="festivalBannerBrand">CLASSIC STEEL</div>
         <p className="festivalBannerKicker">{f.kicker}</p>
@@ -3633,14 +3523,12 @@ function FestivalsAdmin({ photos, refresh }: { photos: any[]; refresh: () => voi
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [dateEdits, setDateEdits] = useState<Record<string, { start: string; end: string }>>({});
-  const [scrollReveal, setScrollReveal] = useState(false);
   const load = () => {
     setLoading(true);
     api("/api/admin/festivals")
       .then((r: any) => {
         setItems(r.items || []);
         setActive(r.active || null);
-        setScrollReveal(!!r.anniversaryScrollReveal);
         const d: any = {};
         for (const it of r.items || [])
           if (it.movable) d[it.key] = { start: formatDateDMY(it.start || ""), end: formatDateDMY(it.end || "") };
@@ -3662,7 +3550,7 @@ function FestivalsAdmin({ photos, refresh }: { photos: any[]; refresh: () => voi
     }
     setSaving(true);
     try {
-      await api("/api/admin/festivals", { method: "PUT", body: JSON.stringify({ dates, anniversaryScrollReveal: scrollReveal }) });
+      await api("/api/admin/festivals", { method: "PUT", body: JSON.stringify({ dates }) });
       notify("Saved.", "success");
       load();
     } catch (e: any) {
@@ -3682,8 +3570,8 @@ function FestivalsAdmin({ photos, refresh }: { photos: any[]; refresh: () => voi
       <h3>Festival greetings</h3>
       <p className="muted">
         A full-width banner wishing clients well appears automatically above the Hero on the exact festival day — the same fixed photo every
-        time, no algorithm involved. New Year, Independence Day, Christmas and your Sep 5 anniversary repeat every year automatically.
-        Ganesh Chaturthi, Diwali and Eid move every year on the lunar calendar, so their dates below need a yearly update.
+        time, no algorithm involved. New Year, Independence Day and Christmas repeat every year automatically. Ganesh Chaturthi, Diwali and
+        Eid move every year on the lunar calendar, so their dates below need a yearly update.
       </p>
       {active && (
         <p className="muted" style={{ color: "var(--accent)", fontWeight: 700 }}>
@@ -3726,23 +3614,6 @@ function FestivalsAdmin({ photos, refresh }: { photos: any[]; refresh: () => voi
           Save dates
         </button>
       </div>
-      <div className="festivalDatesBlock">
-        <h4>Anniversary banner</h4>
-        <p className="muted">
-          Confetti drifts gently by default. Turn this on and it bursts into a richer, faster confetti animation while a visitor is actively
-          scrolling the page, settling back to the gentle version when they stop.
-        </p>
-        <label className="salaryToggle">
-          <input type="checkbox" checked={scrollReveal} onChange={(e) => setScrollReveal(e.target.checked)} />
-          <span className="salarySwitch" aria-hidden="true">
-            <i />
-          </span>
-          <span>Scroll reveal (richer confetti while scrolling)</span>
-        </label>
-        <button className="btn outline" onClick={saveDates} disabled={saving}>
-          Save
-        </button>
-      </div>
       <div className="gallerySlotsGrid">
         {(items || []).map((it: any) => (
           <div className="gallerySlot" key={it.key}>
@@ -3753,9 +3624,6 @@ function FestivalsAdmin({ photos, refresh }: { photos: any[]; refresh: () => voi
             <button type="button" className="festivalPreviewBtn" onClick={() => setPreviewItem(it)}>
               Preview
             </button>
-            <p className="muted" style={{ fontSize: 10, margin: "6px 2px 0" }}>
-              File: public{it.photo.image_url}
-            </p>
           </div>
         ))}
       </div>
