@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>html{background:#f7f4eb}html[data-theme="dark"]{background:#000}html[data-theme="light"]{background:#f7f4eb}body{margin:0}</style>
+<script>
+(function(){
+  try{document.documentElement.setAttribute('data-theme',localStorage.getItem('ip-theme')==='dark'?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}
+  var h=location.hostname,p=location.pathname;
+  if(h.indexOf('admin.')!==0&&p.indexOf('/admin')!==0){
+    window.__earlyPublic=fetch('/api/public').then(function(r){if(!r.ok)throw new Error('early fetch failed');return r.json()});
+    window.__earlyPublic.catch(function(){});
+  }
+})();
+</script>
+<meta name="description" content="Classic Steel — SS railing, MS gates and grills, safety doors, roof sheds, aluminium windows and custom fabrication."/><meta name="theme-color" content="#080c0f"/><link rel="icon" type="image/webp" href="/favicon.webp"/><title>Classic Steel | SS Railing &amp; MS Fabrication Specialist</title>
+
+</head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>

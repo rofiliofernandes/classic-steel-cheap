@@ -1,0 +1,41 @@
+name = "classic-steel"
+main = "src/worker.ts"
+compatibility_date = "2026-09-05"
+workers_dev = true
+keep_vars = true
+
+[assets]
+directory = "./dist/client"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/media/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "classic-steel-db"
+database_id = "REPLACE_WITH_NEW_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "classic-steel-media"
+
+
+[vars]
+SITE_NAME = "Classic Steel"
+PHONE = "REPLACE_WITH_CLIENT_PHONE"
+MAPS_URL = "REPLACE_WITH_CLIENT_MAPS_URL"
+ADMIN_HOST = "manage.classicsteel.example"
+GOOGLE_PLACE_ID = ""
+INSTAGRAM_APP_ID = ""
+INSTAGRAM_REDIRECT_URI = "https://manage.classicsteel.example/api/instagram/callback"
+INSTAGRAM_GRAPH_VERSION = "v24.0"
+ADMIN_OWNER_EMAIL = ""
+RESEND_FROM_EMAIL = "Classic Steel <admin@your-verified-domain.com>"
+
+[triggers]
+crons = ["0 0,12 * * *"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
