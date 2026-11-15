@@ -7077,3 +7077,43 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
     flex: 0 0 auto;
   }
 }
+
+/* Admin: multi-video upload queue */
+.videoUploadGrid {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+.videoPick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.videoPick input {
+  display: none;
+}
+.videoPick.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.videoQueue {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+.videoQueueItem {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.videoQueueSize {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+@media (max-width: 900px) {
+  .videoUploadGrid {
+    grid-template-columns: 1fr;
+  }
+}

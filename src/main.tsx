@@ -4345,65 +4345,69 @@ function putWithProgress(url: string, body: Blob, contentType: string, onProgres
 }
 const VIDEO_UPLOAD_LIMIT = 95 * 1024 * 1024;
 function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: any[]; refresh: () => void }) {
-  const [file, setFile] = useState<File | null>(null),
-    [title, setTitle] = useState(""),
+  const [queue, setQueue] = useState<{ file: File; title: string }[]>([]),
     [category, setCategory] = useState(""),
     [progress, setProgress] = useState<number | null>(null),
     [busy, setBusy] = useState(""),
     [status, setStatus] = useState(""),
     [confirm, setConfirm] = useState<any>(null);
   const cats = services.length ? services.map((s: any) => s.title) : CATS;
-  const upload = async () => {
-    if (!file) return notify("Choose a video file first.");
-    if (!title.trim()) return notify("Enter a title for the video.");
-    const origType = (file.type || "video/mp4").toLowerCase();
-    if (!["video/mp4", "video/webm", "video/quicktime"].includes(origType)) return notify("Please upload an MP4, WebM or MOV video.");
-    if (file.size > 1536 * 1048576) return notify("This video is over 1.5 GB. Please trim it shorter first.");
-    setBusy("upload");
+  const titleFromName = (name: string) =>
+    name
+      .replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+  const addFiles = (list: FileList | null) => {
+    if (!list) return;
+    const ok = ["video/mp4", "video/webm", "video/quicktime"];
+    const picked = Array.from(list).filter((f) => ok.includes((f.type || "video/mp4").toLowerCase()));
+    if (picked.length < list.length) notify("Some files were skipped — only MP4, MOV or WebM videos can be uploaded.");
+    setQueue((q) => [...q, ...picked.map((f) => ({ file: f, title: titleFromName(f.name) }))]);
+    const el = document.querySelector<HTMLInputElement>(".manualVideoInput");
+    if (el) el.value = "";
+  };
+  // Uploads one video: duplicate check → compress → upload file + cover → save. Returns what happened.
+  const uploadOne = async (file: File, title: string, cat: string, say: (t: string) => void): Promise<"ok" | "dup" | string> => {
+    if (file.size > 1536 * 1048576) return "over 1.5 GB";
+    say("checking for duplicates…");
+    const contentHash = await fileHash(file);
+    const check: any = await api("/api/admin/videos/check-hash?hash=" + contentHash);
+    if (check.duplicate) return "dup";
+    say("compressing… 0%");
+    const small = await compressVideo(file, (pct) => say(`compressing… ${pct}%`));
+    if (small.size > VIDEO_UPLOAD_LIMIT) return "still over 95 MB after compression";
+    say(
+      small === file
+        ? "uploading…"
+        : `compressed ${(file.size / 1048576).toFixed(1)} → ${(small.size / 1048576).toFixed(1)} MB, uploading…`,
+    );
+    const type = (small.type || file.type || "video/mp4").toLowerCase();
+    const posterBlob = await captureVideoPoster(small);
+    const signed = await api("/api/admin/upload-url", {
+      method: "POST",
+      body: JSON.stringify({ size: small.size, contentType: type, name: small.name }),
+    });
     setProgress(0);
+    await putWithProgress(signed.url, small, type, setProgress);
+    let poster: any = null;
+    if (posterBlob) {
+      try {
+        poster = await api("/api/admin/upload-url", {
+          method: "POST",
+          body: JSON.stringify({ size: posterBlob.size, contentType: "image/webp", name: file.name, purpose: "video-poster" }),
+        });
+        const put = await fetch(poster.url, { method: "PUT", headers: { "Content-Type": "image/webp" }, body: posterBlob });
+        if (!put.ok) poster = null;
+      } catch {
+        poster = null;
+      }
+    }
     try {
-      setStatus("Checking for duplicates…");
-      const contentHash = await fileHash(file);
-      const check: any = await api("/api/admin/videos/check-hash?hash=" + contentHash);
-      setStatus("");
-      if (check.duplicate) {
-        notify(`This video is already on the site as "${check.title}". It wasn't uploaded again.`);
-        return;
-      }
-      setStatus("Compressing… 0%");
-      const small = await compressVideo(file, (pct) => setStatus(`Compressing… ${pct}%`));
-      setStatus(
-        small === file ? "" : `Compressed ${(file.size / 1048576).toFixed(1)} MB → ${(small.size / 1048576).toFixed(1)} MB. Uploading…`,
-      );
-      if (small.size > VIDEO_UPLOAD_LIMIT) {
-        notify("This video is still larger than 95 MB after compression. Please trim it shorter and try again.");
-        return;
-      }
-      const type = (small.type || origType).toLowerCase();
-      const posterBlob = await captureVideoPoster(small);
-      const signed = await api("/api/admin/upload-url", {
-        method: "POST",
-        body: JSON.stringify({ size: small.size, contentType: type, name: small.name }),
-      });
-      await putWithProgress(signed.url, small, type, setProgress);
-      let poster: any = null;
-      if (posterBlob) {
-        try {
-          poster = await api("/api/admin/upload-url", {
-            method: "POST",
-            body: JSON.stringify({ size: posterBlob.size, contentType: "image/webp", name: file.name, purpose: "video-poster" }),
-          });
-          const put = await fetch(poster.url, { method: "PUT", headers: { "Content-Type": "image/webp" }, body: posterBlob });
-          if (!put.ok) poster = null;
-        } catch {
-          poster = null;
-        }
-      }
       await api("/api/admin/videos", {
         method: "POST",
         body: JSON.stringify({
-          title: title.trim(),
-          category: category || cats[0] || "Other",
+          title: title.trim() || titleFromName(file.name) || "Project video",
+          category: cat,
           r2_key: signed.key,
           reservationId: signed.reservationId,
           poster_key: poster?.key || "",
@@ -4411,16 +4415,42 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
           content_hash: contentHash,
         }),
       });
-      setFile(null);
-      setTitle("");
-      const el = document.querySelector<HTMLInputElement>(".manualVideoInput");
-      if (el) el.value = "";
-      notify("Video uploaded and now showing on the website.", "success");
-      refresh();
     } catch (e: any) {
-      notify(e.message);
+      if (e?.data?.duplicate) return "dup";
+      throw e;
+    }
+    return "ok";
+  };
+  const upload = async () => {
+    if (!queue.length) return notify("Choose one or more videos first.");
+    const cat = category || cats[0] || "Other";
+    const items = queue.slice();
+    setBusy("upload");
+    let done = 0,
+      dups = 0;
+    const failed: string[] = [];
+    try {
+      for (let k = 0; k < items.length; k++) {
+        const it = items[k];
+        const say = (t: string) => setStatus(`Video ${k + 1} of ${items.length} (${it.title || it.file.name}): ${t}`);
+        try {
+          const r = await uploadOne(it.file, it.title, cat, say);
+          if (r === "ok") done++;
+          else if (r === "dup") dups++;
+          else failed.push(`${it.title || it.file.name} (${r})`);
+        } catch (e: any) {
+          failed.push(`${it.title || it.file.name} (${e?.message || "failed"})`);
+        }
+        setQueue((q) => q.filter((x) => x.file !== it.file));
+      }
+      const parts = [`Uploaded ${done} video${done === 1 ? "" : "s"}.`];
+      if (dups) parts.push(`Skipped ${dups} already on the site.`);
+      if (failed.length) parts.push(`Failed: ${failed.join(", ")}.`);
+      notify(parts.join(" "), failed.length && !done ? "error" : "success");
+      refresh();
     } finally {
       setBusy("");
+      setStatus("");
       setProgress(null);
     }
   };
@@ -4513,49 +4543,71 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
   return (
     <>
       <div className="panel videoAdminPanel">
-        <h3>Upload a video</h3>
+        <h3>Upload videos</h3>
         <p className="muted">
-          MP4, MOV or WebM. Videos are compressed automatically before uploading (Full HD, high quality) so they load fast, and a cover
-          image is taken from the video. After compression a video must be under 95 MB.
+          Choose one or many MP4, MOV or WebM videos. Each is checked for duplicates, compressed automatically (Full HD, high quality) and
+          gets a cover image from the video. After compression a video must be under 95 MB.
         </p>
         <div className="manualVideoGrid videoUploadGrid">
-          <input
-            className="input manualVideoInput"
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm"
-            onChange={(e) => {
-              const f = e.target.files?.[0] || null;
-              setFile(f);
-              if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "));
-            }}
-            disabled={!!busy}
-          />
-          <input
+          <label className={`btn outline videoPick${busy ? " disabled" : ""}`}>
+            <Upload size={17} /> Choose videos
+            <input
+              className="manualVideoInput"
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm"
+              multiple
+              onChange={(e) => addFiles(e.target.files)}
+              disabled={!!busy}
+            />
+          </label>
+          <select
             className="input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title, e.g. SS railing installation"
+            value={category || cats[0]}
+            onChange={(e) => setCategory(e.target.value)}
             disabled={!!busy}
-          />
-          <select className="input" value={category || cats[0]} onChange={(e) => setCategory(e.target.value)} disabled={!!busy}>
+            aria-label="Category"
+          >
             {cats.map((c: string) => (
               <option key={c}>{c}</option>
             ))}
           </select>
-          <button className="btn light" onClick={upload} disabled={!!busy}>
-            {busy === "upload" ? (
-              progress !== null && progress < 100 ? (
-                `Uploading… ${progress}%`
-              ) : (
-                "Saving…"
-              )
-            ) : (
-              <>
-                <Upload size={17} /> Upload video
-              </>
-            )}
+          <button className="btn light" onClick={upload} disabled={!!busy || !queue.length}>
+            {busy === "upload"
+              ? progress !== null && progress < 100
+                ? `Uploading… ${progress}%`
+                : "Working…"
+              : queue.length > 1
+                ? `Upload ${queue.length} videos`
+                : "Upload video"}
           </button>
         </div>
+        {queue.length > 0 && (
+          <div className="videoQueue">
+            {queue.map((it, k) => (
+              <div className="videoQueueItem" key={it.file.name + it.file.size + k}>
+                <span className="videoQueueSize">{(it.file.size / 1048576).toFixed(1)} MB</span>
+                <input
+                  className="input"
+                  value={it.title}
+                  placeholder="Title, e.g. SS railing installation"
+                  disabled={!!busy}
+                  onChange={(e) => setQueue((q) => q.map((x, j) => (j === k ? { ...x, title: e.target.value } : x)))}
+                  aria-label={`Title for ${it.file.name}`}
+                />
+                <button
+                  type="button"
+                  className="iconDanger"
+                  disabled={!!busy}
+                  onClick={() => setQueue((q) => q.filter((_, j) => j !== k))}
+                  aria-label={`Remove ${it.file.name}`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
+            <p className="muted">All selected videos go into the “{category || cats[0]}” category. You can change each one later below.</p>
+          </div>
+        )}
         {busy === "upload" && status && <p className="syncStatus">{status}</p>}
         {busy === "upload" && progress !== null && (
           <div className="uploadBar" aria-hidden="true">
