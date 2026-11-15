@@ -48,15 +48,7 @@ const WA_QUOTE = WA + "?text=" + encodeURIComponent(WA_QUOTE_TEXT);
 const MAPS = "https://maps.app.goo.gl/AAHkDogEJLhGy6aZ8";
 const MAP_EMBED = "https://www.google.com/maps?q=Panzorconi%2C%20Cuncolim%2C%20Goa%20403703&output=embed";
 const LOCATION = "Panzorconi, Cuncolim, Goa – 403703";
-const FALLBACK = [
-  "/services/ss-railing.webp",
-  "/services/ms-gate-grill.webp",
-  "/services/roof-shed.webp",
-  "/services/glass-work.webp",
-  "/services/safety-door.webp",
-  "/services/aluminium-windows.webp",
-  "/services/railing-stairs.webp",
-];
+const FALLBACK = ["/og.webp"];
 function formatPhone(p: string) {
   return p.length === 10 ? `${p.slice(0, 5)} ${p.slice(5)}` : p;
 }
@@ -833,7 +825,7 @@ function About({ data }: { data: any }) {
     : data.homepage?.aboutPhoto
       ? [data.homepage.aboutPhoto]
       : null;
-  const items = source && source.length ? source.slice(0, 8) : data.loaded ? [{ image_url: "/services/railing-stairs.webp" }] : [];
+  const items = source && source.length ? source.slice(0, 8) : data.loaded ? [{ image_url: "/og.webp" }] : [];
   const [i, setI] = useState(0);
   useEffect(() => {
     setI(0);
@@ -928,38 +920,38 @@ const DEFAULT_RANGE = [
     id: "r1",
     title: "SS Railing",
     description: "Modern, durable and elegant stainless-steel railings for stairs, balconies and terraces.",
-    image_url: "/services/ss-railing.webp",
+    image_url: "",
   },
   {
     id: "r2",
     title: "MS Gate & Grill",
     description: "Strong, secure and stylish gates and window grills.",
-    image_url: "/services/ms-gate-grill.webp",
+    image_url: "",
   },
-  { id: "r3", title: "Safety Door", description: "Protection and peace of mind for your home.", image_url: "/services/safety-door.webp" },
+  { id: "r3", title: "Safety Door", description: "Protection and peace of mind for your home.", image_url: "" },
   {
     id: "r4",
     title: "Roof Shed",
     description: "Weather-proof, long-lasting sheds for parking, terraces and courtyards.",
-    image_url: "/services/roof-shed.webp",
+    image_url: "",
   },
   {
     id: "r5",
     title: "Aluminium Windows",
     description: "Light, stylish and modern aluminium windows.",
-    image_url: "/services/aluminium-windows.webp",
+    image_url: "",
   },
   {
     id: "r6",
     title: "Glass Work",
     description: "Clean look, premium finish — glass railings, partitions and more.",
-    image_url: "/services/glass-work.webp",
+    image_url: "",
   },
   {
     id: "r7",
     title: "Fabrication",
     description: "All types of fabrication — custom work as per your needs.",
-    image_url: "/services/railing-stairs.webp",
+    image_url: "",
   },
 ];
 function ServiceIcon({ title }: { title: string }) {
