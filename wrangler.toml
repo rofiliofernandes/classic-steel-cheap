@@ -1,4 +1,4 @@
-name = "capital-upvc"
+name = "classic-steel-cheap"
 main = "src/worker.ts"
 compatibility_date = "2026-09-05"
 workers_dev = true
@@ -11,15 +11,15 @@ run_worker_first = ["/api/*", "/media/*"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "capital-upvc-db"
+database_name = "classic-steel-db"
 # Replace with the id printed by: npx wrangler d1 create capital-upvc-db
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "83c4ad4a-2f93-4e05-aa2b-be7997a1c316"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "MEDIA"
 # Create with: npx wrangler r2 bucket create capital-upvc-media
-bucket_name = "capital-upvc-media"
+bucket_name = "classic-steel-media"
 
 [vars]
 SITE_NAME = "Capital UPVC Windows & Doors"
@@ -28,7 +28,7 @@ MAPS_URL = "https://maps.app.goo.gl/MStEk8sBR9QoNXGu7"
 # Total storage allowed for uploaded/downloaded photos and videos (in GB).
 STORAGE_LIMIT_GB = "10"
 # Set these once your domain is connected, e.g. admin.capitalupvc.com
-ADMIN_HOST = ""
+ADMIN_HOST = "classic-steel-cheap.rofitest8.workers.dev"
 INSTAGRAM_APP_ID = ""
 INSTAGRAM_REDIRECT_URI = ""
 INSTAGRAM_GRAPH_VERSION = "v24.0"
