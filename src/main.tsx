@@ -1242,7 +1242,30 @@ function VideoGallery({ data }: { data: any }) {
   useEffect(() => {
     if (active > Math.max(0, items.length - 1)) setActive(Math.max(0, items.length - 1));
   }, [items.length, active]);
-  if (!items.length) return null;
+  // Still loading: keep the space quiet. Loaded with no videos: show the section with a friendly message.
+  if (!data.loaded && !items.length) return null;
+  if (!items.length)
+    return (
+      <section className="referenceSection instagramReels videoGallery" id="projects">
+        <div className="referenceWrap">
+          <div className="referenceSectionHead centerOnly">
+            <div>
+              <small>OUR PROJECTS</small>
+              <h2>Real work. Different spaces.</h2>
+            </div>
+          </div>
+          <div className="videoEmpty">
+            <Play size={28} />
+            <p>Project videos are coming soon. Meanwhile, browse our work or WhatsApp us for photos of similar jobs.</p>
+          </div>
+        </div>
+        <div className="centerAction">
+          <a className="referenceButton dark" href="/projects">
+            EXPLORE ALL PROJECTS <ArrowRight size={13} />
+          </a>
+        </div>
+      </section>
+    );
   const n = items.length;
   const go = (next: number) => {
     videoRef.current?.pause();

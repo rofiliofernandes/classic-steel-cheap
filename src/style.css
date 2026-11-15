@@ -7215,3 +7215,22 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
     gap: 8px;
   }
 }
+.videoEmpty {
+  max-width: 560px;
+  margin: 8px auto 0;
+  padding: 34px 24px;
+  border: 1px dashed var(--public-line);
+  border-radius: 16px;
+  background: var(--public-card);
+  color: var(--public-muted);
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+.videoEmpty svg {
+  color: #a8823f;
+}
+.videoEmpty p {
+  margin: 0;
+}
