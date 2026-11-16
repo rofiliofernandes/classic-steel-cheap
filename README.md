@@ -18,7 +18,7 @@ Website and private admin panel for Classic Steel (Panzorconi, Cuncolim, Goa), r
 - **Festivals:** set the dates for movable festivals.
 - **Categories:** Windows, Sliding, Doors, Wood-finish and Large openings. Each category has a description, an image and the Instagram hashtags that map to it.
 - **Videos:**
-  - **Manual upload:** MP4, MOV or WebM up to 95 MB, with an upload progress bar. A cover image is captured from the video automatically.
+  - **Manual upload:** MP4, MOV or WebM, up to 75 MB each after automatic compression, with an upload progress bar. A cover image is captured from the video automatically.
   - **Instagram:** syncing **downloads both photos and videos** (Reels, video posts and videos inside carousels) into R2, so they keep playing even if the Instagram link changes. Any download still queued finishes in the background through the twice-daily scheduled job.
   - **Managing videos:** reorder, rename, hide or show, and delete. Deleting a video also removes its file. Deleted Instagram videos aren't downloaded again unless you click "Restore deleted".
 - **Testimonials:** add real customer reviews by hand.
@@ -68,7 +68,7 @@ When a post is synced, the hashtags in its caption are matched against each cate
 Instagram videos always appear in the carousel as soon as they've been downloaded. You can hide any of them from the Videos tab.
 
 ## Limits worth knowing
-- **Manual video uploads:** up to 95 MB each. Cloudflare's request-size limit is 100 MB on the Free and Pro plans. For larger files, compress the video on your phone before uploading.
+- **Videos:** 75 MB maximum each (manual uploads and Instagram downloads), enforced by the server. Videos are compressed in the browser first, so most phone videos fit; for larger files, trim or compress the video on your phone before uploading.
 - **Instagram videos:** downloaded in the background, a few per request. If one fails, it's retried up to 5 times (use **Retry downloads** to reset the count).
 - **Business anniversary banner:** off by default. To turn it on, set `ANNIVERSARY` near `FESTIVAL_COPY` in `src/worker.ts`.
 

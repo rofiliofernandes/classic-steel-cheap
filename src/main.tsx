@@ -4775,7 +4775,8 @@ function putWithProgress(url: string, body: Blob, contentType: string, onProgres
     xhr.send(body);
   });
 }
-const VIDEO_UPLOAD_LIMIT = 95 * 1024 * 1024;
+const VIDEO_UPLOAD_MB = 75;
+const VIDEO_UPLOAD_LIMIT = VIDEO_UPLOAD_MB * 1024 * 1024;
 // Tap a video thumbnail in the admin: watch it, then rename / re-categorise it in the same place.
 function VideoPreviewModal({
   list,
@@ -4916,7 +4917,8 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
     if (check.duplicate) return "dup";
     say("compressing… 0%");
     const small = await compressVideo(file, (pct) => say(`compressing… ${pct}%`));
-    if (small.size > VIDEO_UPLOAD_LIMIT) return "still over 95 MB after compression";
+    if (small.size > VIDEO_UPLOAD_LIMIT)
+      return `still ${(small.size / 1048576).toFixed(0)} MB after compression — the limit is ${VIDEO_UPLOAD_MB} MB; trim it shorter`;
     say(
       small === file
         ? "uploading…"
@@ -5087,7 +5089,7 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
         <h3>Upload videos</h3>
         <p className="muted">
           Choose one or many MP4, MOV or WebM videos. Each is checked for duplicates, compressed automatically (Full HD, high quality) and
-          gets a cover image from the video. After compression a video must be under 95 MB.
+          gets a cover image from the video. Limit: 75 MB per video after compression.
         </p>
         <div className="manualVideoGrid videoUploadGrid">
           <label className={`btn outline videoPick${busy ? " disabled" : ""}`}>

@@ -173,9 +173,10 @@ function storageLimitBytes(env: Env) {
   return Math.round(capped * 1024 * 1024 * 1024);
 }
 const MAX_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
-// Cloudflare Workers accept request bodies up to 100 MB on Free/Pro plans.
-const MAX_VIDEO_UPLOAD_BYTES = 95 * 1024 * 1024;
-const MAX_INSTAGRAM_VIDEO_BYTES = 300 * 1024 * 1024;
+// Hard limit for every video stored on the site (manual uploads and Instagram downloads).
+const MAX_VIDEO_MB = 75;
+const MAX_VIDEO_UPLOAD_BYTES = MAX_VIDEO_MB * 1024 * 1024;
+const MAX_INSTAGRAM_VIDEO_BYTES = MAX_VIDEO_UPLOAD_BYTES;
 const VIDEO_TYPES: Record<string, string> = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
 const MAX_GALLERY_SLOTS = 21;
 const MIN_GALLERY_SLOTS = 3;
@@ -1211,7 +1212,10 @@ app.post("/api/admin/upload-url", requireAuth, async (c) => {
     return c.json({ error: "Photos must be converted to WebP first; videos must be MP4, WebM or MOV" }, 415);
   const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_IMAGE_UPLOAD_BYTES;
   if (!Number.isInteger(size) || size <= 0 || size > maxBytes)
-    return c.json({ error: isVideo ? "Video must be smaller than 95 MB. Compress it and try again." : "File must be 1 byte–30 MB" }, 400);
+    return c.json(
+      { error: isVideo ? `Video must be ${MAX_VIDEO_MB} MB or smaller. Trim or compress it and try again.` : "File must be 1 byte–30 MB" },
+      400,
+    );
   const reservationId = uid();
   if (!(await reserveStorage(c, reservationId, size))) return c.json({ error: "Storage limit reached" }, 413);
   const base = String(b.name || (isVideo ? "video" : "photo"))
@@ -1995,7 +1999,7 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       const resp = await fetch(videoUrl, { headers: IG_MEDIA_HEADERS });
       if (!resp.ok || !resp.body) throw new Error(`Video download failed (HTTP ${resp.status})`);
       const declared = Number(resp.headers.get("content-length") || 0);
-      if (declared > MAX_INSTAGRAM_VIDEO_BYTES) throw new Error("Video is larger than 300 MB");
+      if (declared > MAX_INSTAGRAM_VIDEO_BYTES) throw new Error(`Video is larger than ${MAX_VIDEO_MB} MB`);
       const used = await storageUsed(c);
       if (declared && used + declared > storageLimitBytes(c.env)) {
         result.error = "Storage limit reached; remaining Instagram videos were not downloaded.";
@@ -2005,7 +2009,7 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       let body: any = resp.body;
       if (!declared) {
         const buf = await resp.arrayBuffer();
-        if (buf.byteLength > MAX_INSTAGRAM_VIDEO_BYTES) throw new Error("Video is larger than 300 MB");
+        if (buf.byteLength > MAX_INSTAGRAM_VIDEO_BYTES) throw new Error(`Video is larger than ${MAX_VIDEO_MB} MB`);
         if (used + buf.byteLength > storageLimitBytes(c.env)) {
           result.error = "Storage limit reached; remaining Instagram videos were not downloaded.";
           break;
@@ -2017,6 +2021,7 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       });
       invalidateStorageCache();
       const fileBytes = Number(stored?.size || declared || 0);
+      if (fileBytes > MAX_INSTAGRAM_VIDEO_BYTES) throw new Error(`Video is larger than ${MAX_VIDEO_MB} MB`);
       if (!fileBytes) throw new Error("Downloaded video was empty");
       let posterPath = String(row.thumbnail_url || "").startsWith("/media/") ? String(row.thumbnail_url) : "";
       let posterBytes = posterPath ? Number(row.bytes || 0) : 0;
@@ -2443,6 +2448,11 @@ app.post("/api/admin/videos", requireAuth, async (c) => {
   if (!title) return c.json({ error: "Enter a title for the video." }, 400);
   const video = await claimUploadedObject(c, textField(b.r2_key, 500), textField(b.reservationId, 100), "videos/uploads/");
   if (!video) return c.json({ error: "Uploaded video not found. Please upload it again." }, 400);
+  if (video.size > MAX_VIDEO_UPLOAD_BYTES) {
+    await c.env.MEDIA.delete(textField(b.r2_key, 500)).catch(() => {});
+    if (video.reservationId) await releaseStorage(c, video.reservationId);
+    return c.json({ error: `Video must be ${MAX_VIDEO_MB} MB or smaller.` }, 413);
+  }
   const posterKey = textField(b.poster_key, 500);
   const contentHash = cleanHash(b.content_hash);
   const dup: any = await findVideoByHash(c, contentHash);
