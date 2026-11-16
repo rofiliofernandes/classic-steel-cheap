@@ -7892,3 +7892,25 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   border-color: #e5a91b;
   color: #0a1f33;
 }
+
+/* Cropped photo (admin "Fix crop position"): shown in a 4:5 frame, centred in the stage */
+.croppedFrame {
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  height: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 10px;
+  background: #0b1014;
+}
+.croppedFrame.projectPhotoMain {
+  width: auto;
+  display: block;
+}
+.croppedFrame img {
+  display: block;
+}
+.lightboxCrop {
+  height: min(86vh, 900px);
+  width: auto;
+}

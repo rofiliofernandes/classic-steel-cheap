@@ -502,6 +502,13 @@ function GalleryTile({
     </div>
   );
 }
+// A photo the admin has cropped (position or zoom moved off the default) is shown cropped, in the same 4:5 frame as the crop preview.
+function hasCrop(p: any) {
+  const fx = Number(p?.focal_x ?? 50),
+    fy = Number(p?.focal_y ?? 50),
+    z = Number(p?.focal_zoom ?? 1);
+  return fx !== 50 || fy !== 50 || z !== 1;
+}
 function Lightbox({ photo, onClose }: { photo: any; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -520,7 +527,13 @@ function Lightbox({ photo, onClose }: { photo: any; onClose: () => void }) {
         <X size={24} />
       </button>
       <figure onClick={(e) => e.stopPropagation()}>
-        <img src={photo.image_url || photo.image} alt={photo.caption || "Classic Steel project"} />
+        {hasCrop(photo) ? (
+          <div className="croppedFrame lightboxCrop">
+            <SmartCropStatic photo={photo} alt={photo.caption || "Classic Steel project"} />
+          </div>
+        ) : (
+          <img src={photo.image_url || photo.image} alt={photo.caption || "Classic Steel project"} />
+        )}
         {(photo.caption || photo.category) && (
           <figcaption>
             <b>{photo.caption}</b>
@@ -1597,13 +1610,19 @@ function ProjectPhotoViewer({ photos }: { photos: any[] }) {
         }}
       >
         <img className="projectVideoBackdrop" src={p.image_url} alt="" aria-hidden="true" />
-        <img
-          key={p.id}
-          className="projectPhotoMain"
-          src={p.image_url}
-          alt={p.caption || p.category || "Classic Steel project"}
-          onClick={() => setZoom(p)}
-        />
+        {hasCrop(p) ? (
+          <div key={p.id} className="croppedFrame projectPhotoMain" onClick={() => setZoom(p)}>
+            <SmartCropStatic photo={p} alt={p.caption || p.category || "Classic Steel project"} />
+          </div>
+        ) : (
+          <img
+            key={p.id}
+            className="projectPhotoMain"
+            src={p.image_url}
+            alt={p.caption || p.category || "Classic Steel project"}
+            onClick={() => setZoom(p)}
+          />
+        )}
         {n > 1 && (
           <>
             <button type="button" className="projectVideoArrow prev" onClick={() => go(-1)} aria-label="Previous photo">
