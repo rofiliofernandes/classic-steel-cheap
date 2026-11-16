@@ -2738,6 +2738,7 @@ const CLICK_ACTIONS = new Set([
   "whatsapp_footer",
   "quote_nav",
   "quote_hero",
+  "quote_footer",
   "call_click",
 ]);
 app.post("/api/track-click", async (c) => {

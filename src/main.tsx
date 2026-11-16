@@ -1435,63 +1435,73 @@ function WhatsAppWidget() {
 function Footer({ data }: { data: any }) {
   const ig = instagramUrl(data);
   return (
-    <footer className="siteFooter" id="contact">
-      <div className="referenceWrap footerInfo">
-        <div className="footerInfoCol">
-          <h3>About Us</h3>
-          <p>SS railing &amp; MS fabrication — strong structure, beautiful design.</p>
-        </div>
-        <div className="footerInfoCol">
-          <h3>Talk to us</h3>
-          {PHONES.map((p) => (
-            <p key={p}>
-              <b>Phone:</b>{" "}
-              <a href={phoneLink(p)} onClick={() => trackClick("call_click")}>
-                {formatPhone(p)}
-              </a>
-            </p>
-          ))}
-          <p>
-            <b>WhatsApp:</b>{" "}
-            <a href={WA_QUOTE} target="_blank" rel="noreferrer" onClick={() => trackClick("whatsapp_footer")}>
-              {formatPhone(PHONES[0])}
-            </a>
-          </p>
-        </div>
-        <div className="footerInfoCol">
-          <h3>Our Location</h3>
-          <p>{LOCATION}</p>
-          <a className="footerMapLink" href={MAPS} target="_blank" rel="noreferrer">
-            <MapPin size={18} /> View on Google Maps <ArrowRight size={15} />
+    <footer className="csFooter" id="contact">
+      <div className="referenceWrap csFooterGrid">
+        <div className="csFooterBrand">
+          <a href="/" className="csFooterLogo" aria-label="Classic Steel home">
+            <img src="/logo.svg" alt="Classic Steel — SS Railing & MS Fabrication" />
+          </a>
+          <p>SS railings, MS gates &amp; grills, safety doors, roof sheds, aluminium windows and glass work across Goa.</p>
+          <a className="csFooterCta" href="/contact" onClick={() => trackClick("quote_footer")}>
+            Get a quote <ArrowRight size={15} />
           </a>
         </div>
-      </div>
-      <div className="referenceWrap footerBottomNew">
-        <div className="footerBrand">
-          <img className="footerWordmark" src="/logo.svg" alt="Classic Steel" />
-        </div>
-        <nav className="footerNav">
+        <nav className="csFooterCol" aria-label="Footer">
+          <h3>Quick links</h3>
           <a href="/">Home</a>
           <a href="/#about">About</a>
           <a href="/#services">Services</a>
           <a href="/projects">Projects</a>
           <a href="/contact">Contact</a>
         </nav>
-        <div className="footerSocials">
+        <div className="csFooterCol">
+          <h3>Talk to us</h3>
+          {PHONES.map((p) => (
+            <a key={p} className="csFooterAction" href={phoneLink(p)} onClick={() => trackClick("call_click")}>
+              <span className="csFooterIcon">
+                <Phone size={16} />
+              </span>
+              <span>
+                <small>Call</small>
+                {formatPhone(p)}
+              </span>
+            </a>
+          ))}
+          <a className="csFooterAction" href={WA_QUOTE} target="_blank" rel="noreferrer" onClick={() => trackClick("whatsapp_footer")}>
+            <span className="csFooterIcon wa">
+              <WhatsAppLogo size={18} />
+            </span>
+            <span>
+              <small>WhatsApp</small>
+              {formatPhone(PHONES[0])}
+            </span>
+          </a>
           {ig && (
-            <a className="socialInstagram" href={ig} target="_blank" rel="noreferrer" aria-label="Instagram">
-              <Instagram size={28} />
+            <a className="csFooterAction" href={ig} target="_blank" rel="noreferrer">
+              <span className="csFooterIcon">
+                <Instagram size={16} />
+              </span>
+              <span>
+                <small>Instagram</small>@{String(data?.instagramUsername || "")}
+              </span>
             </a>
           )}
-          <a className="socialWhatsapp" href={WA_QUOTE} target="_blank" rel="noreferrer" aria-label="WhatsApp">
-            <WhatsAppLogo size={30} />
+        </div>
+        <div className="csFooterCol">
+          <h3>Visit us</h3>
+          <p className="csFooterAddress">
+            <MapPin size={16} />
+            <span>{LOCATION}</span>
+          </p>
+          <a className="csFooterLink" href={MAPS} target="_blank" rel="noreferrer">
+            Open in Google Maps <ArrowRight size={14} />
           </a>
         </div>
       </div>
-      <div className="footerMapFull">
+      <div className="referenceWrap csFooterMap">
         <iframe title="Classic Steel location" src={MAP_EMBED} loading="lazy" />
       </div>
-      <div className="referenceWrap footerCopyright">
+      <div className="referenceWrap csFooterBottom">
         <span>
           © {new Date().getFullYear()} {BRAND}. All rights reserved.
         </span>
