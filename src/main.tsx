@@ -1857,6 +1857,104 @@ function hammingDistance(a: string, b: string) {
 function isDuplicatePhash(phash: string, existing: string[]) {
   return existing.some((h) => h && hammingDistance(phash, h) <= 6);
 }
+// Full-screen photo chooser used by the Homepage editor (hero, About strip, gallery slots).
+function PhotoChooser({
+  photos,
+  chosenId,
+  title,
+  note,
+  onPick,
+  onUpload,
+  uploading,
+  onClose,
+}: {
+  photos: any[];
+  chosenId?: string | null;
+  title: string;
+  note?: string;
+  onPick: (id: string) => void;
+  onUpload?: (f: File) => void;
+  uploading?: boolean;
+  onClose: () => void;
+}) {
+  const cats = ["All", ...Array.from(new Set<string>(photos.map((p: any) => p.category || p.occasion || "Other")))];
+  const [cat, setCat] = useState("All");
+  const shown = cat === "All" ? photos : photos.filter((p: any) => (p.category || p.occasion || "Other") === cat);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, []);
+  return createPortal(
+    <div className="chooserOverlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="chooserPanel" onClick={(e) => e.stopPropagation()}>
+        <div className="chooserHead">
+          <div>
+            <b>{title}</b>
+            <span className="muted">
+              {shown.length} photo{shown.length === 1 ? "" : "s"} · tap one to choose it
+            </span>
+          </div>
+          <button type="button" className="btn outline" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        {note && <p className="muted chooserNote">{note}</p>}
+        {cats.length > 2 && (
+          <div className="chooserCats">
+            {cats.map((c) => (
+              <button type="button" key={c} className={c === cat ? "active" : ""} onClick={() => setCat(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="chooserGrid">
+          {shown.map((p: any) => (
+            <button
+              type="button"
+              key={p.id}
+              className={`chooserItem${chosenId === p.id ? " chosen" : ""}`}
+              onClick={() => onPick(p.id)}
+              title={p.caption || p.category || ""}
+            >
+              <PickerThumb src={p.image_url} />
+              {p._count > 1 && <span className="pickerStackBadge">{p._count}</span>}
+              {chosenId === p.id && (
+                <span className="chooserCheck">
+                  <Check size={16} />
+                </span>
+              )}
+            </button>
+          ))}
+          {!shown.length && <p className="muted">No published photos here yet.</p>}
+        </div>
+        {onUpload && (
+          <label className="chooserUpload">
+            <Upload size={18} />
+            <span>{uploading ? "Uploading…" : "Or upload a new photo"}</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onUpload(f);
+              }}
+            />
+          </label>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
 function PickerThumb({ src }: { src: string }) {
   const [broken, setBroken] = useState(false);
   if (broken) return <span className="pickerThumbBroken" title="Not viewable here yet — still on Instagram's servers" />;
@@ -2785,40 +2883,20 @@ function GallerySlotsEditor({ services, photos, initial, refresh }: { services: 
                       </button>
                     </>
                   ) : (
-                    <div className="gallerySlotPinPicker">
-                      {slot.type === "category" && (
-                        <p className="muted" style={{ fontSize: 11, margin: "0 0 8px" }}>
-                          Showing only {slot.category} photos, so whatever you tap fits this slot. Tap one to pin it here exactly.
-                        </p>
-                      )}
-                      <div className="selectionGrid small">
-                        {pickerGroups.map((g: any[]) => (
-                          <button
-                            type="button"
-                            key={g[0].id}
-                            className={slot.type === "pinned" && g.some((p: any) => p.id === slot.photo_id) ? "chosen" : ""}
-                            onClick={() => pinSlot(i, g[0].id)}
-                          >
-                            <PickerThumb src={g[0].image_url} />
-                            {g.length > 1 && <span className="pickerStackBadge">{g.length}</span>}
-                          </button>
-                        ))}
-                        {!pickerGroups.length && <p className="muted">No approved photos in this category yet.</p>}
-                      </div>
-                      <label className="filePick small">
-                        Or upload a new photo for this slot
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) uploadForSlot(i, f);
-                          }}
-                          disabled={uploading}
-                        />
-                        <span>{uploading ? "Uploading…" : "Choose image"}</span>
-                      </label>
-                    </div>
+                    <PhotoChooser
+                      photos={pickerGroups.map((g: any[]) => ({ ...g[0], _count: g.length }))}
+                      chosenId={
+                        slot.type === "pinned" ? pickerGroups.find((g: any[]) => g.some((p: any) => p.id === slot.photo_id))?.[0]?.id : null
+                      }
+                      title={`Choose photo for slot ${i + 1}`}
+                      note={
+                        slot.type === "category" ? `Showing only ${slot.category} photos, so whatever you tap fits this slot.` : undefined
+                      }
+                      onPick={(id) => pinSlot(i, id)}
+                      onUpload={(f) => uploadForSlot(i, f)}
+                      uploading={uploading}
+                      onClose={() => setOpenIdx(null)}
+                    />
                   )}
                 </div>
               )}
@@ -2999,30 +3077,15 @@ function HeroAdmin({ photos, initial, refresh }: { photos: any[]; initial: any; 
                   </button>
                 )}
                 {openIdx === i && (
-                  <div className="gallerySlotPopover">
-                    <div className="gallerySlotPinPicker">
-                      <div className="selectionGrid small">
-                        {approved.map((p: any) => (
-                          <button type="button" key={p.id} className={photoId === p.id ? "chosen" : ""} onClick={() => pickSlot(i, p.id)}>
-                            <PickerThumb src={p.image_url} />
-                          </button>
-                        ))}
-                      </div>
-                      <label className="filePick small">
-                        Or upload a new photo for this slot
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) uploadForSlot(i, f);
-                          }}
-                          disabled={uploading}
-                        />
-                        <span>{uploading ? "Uploading…" : "Choose image"}</span>
-                      </label>
-                    </div>
-                  </div>
+                  <PhotoChooser
+                    photos={approved}
+                    chosenId={photoId}
+                    title={`Choose photo ${i + 1}`}
+                    onPick={(id) => pickSlot(i, id)}
+                    onUpload={(f) => uploadForSlot(i, f)}
+                    uploading={uploading}
+                    onClose={() => setOpenIdx(null)}
+                  />
                 )}
               </div>
             );
@@ -3185,30 +3248,15 @@ function StripAdmin({ photos, initial, refresh }: { photos: any[]; initial: any;
                 </button>
               )}
               {openIdx === i && (
-                <div className="gallerySlotPopover">
-                  <div className="gallerySlotPinPicker">
-                    <div className="selectionGrid small">
-                      {approved.map((p: any) => (
-                        <button type="button" key={p.id} className={photoId === p.id ? "chosen" : ""} onClick={() => pickSlot(i, p.id)}>
-                          <PickerThumb src={p.image_url} />
-                        </button>
-                      ))}
-                    </div>
-                    <label className="filePick small">
-                      Or upload a new photo for this slot
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) uploadForSlot(i, f);
-                        }}
-                        disabled={uploading}
-                      />
-                      <span>{uploading ? "Uploading…" : "Choose image"}</span>
-                    </label>
-                  </div>
-                </div>
+                <PhotoChooser
+                  photos={approved}
+                  chosenId={photoId}
+                  title={`Choose photo ${i + 1}`}
+                  onPick={(id) => pickSlot(i, id)}
+                  onUpload={(f) => uploadForSlot(i, f)}
+                  uploading={uploading}
+                  onClose={() => setOpenIdx(null)}
+                />
               )}
             </div>
           );
