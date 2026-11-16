@@ -7256,3 +7256,110 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
 .serviceProjectThumbs img.notShown {
   opacity: 0.35;
 }
+
+/* Admin: tap a video thumbnail to preview + rename */
+.videoThumbBtn {
+  position: relative;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+.videoThumbPlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffffe0;
+  color: #102f4a;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 8px #0004;
+}
+.videoPreviewOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #05080ae6;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.videoPreviewPanel {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: var(--panel, #fffdf8);
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.videoPreviewHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.videoPreviewHead .btn {
+  padding: 6px 10px;
+}
+.videoPreviewPlayer {
+  width: 100%;
+  max-height: 58vh;
+  background: #000;
+  border-radius: 12px;
+  object-fit: contain;
+}
+.videoPreviewField {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.videoPreviewActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.videoPreviewActions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 8px;
+}
+
+/* Admin on phones: list rows wrap their buttons instead of widening the page */
+@media (max-width: 760px) {
+  .admin .listItem {
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+  }
+  .admin .listItemMain {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .admin .listItemMain > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .admin .listActions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .admin .listActions .videoCatSelect {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  .admin .listActions .btn {
+    padding: 9px 12px;
+  }
+}

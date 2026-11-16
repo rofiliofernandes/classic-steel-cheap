@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import {
   AppWindow,
   ArrowDown,
@@ -4286,7 +4287,114 @@ function putWithProgress(url: string, body: Blob, contentType: string, onProgres
   });
 }
 const VIDEO_UPLOAD_LIMIT = 95 * 1024 * 1024;
+// Tap a video thumbnail in the admin: watch it, then rename / re-categorise it in the same place.
+function VideoPreviewModal({
+  list,
+  index,
+  cats,
+  onIndex,
+  onClose,
+  onSave,
+}: {
+  list: any[];
+  index: number;
+  cats: string[];
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onSave: (v: any, changes: any) => Promise<void>;
+}) {
+  const v = list[index];
+  const [title, setTitle] = useState(v?.title || "");
+  const [category, setCategory] = useState(v?.category || "Other");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    setTitle(v?.title || "");
+    setCategory(v?.category || "Other");
+  }, [v?.id]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, []);
+  if (!v) return null;
+  const dirty = title.trim() !== String(v.title || "") || category !== String(v.category || "Other");
+  const save = async (thenNext: boolean) => {
+    if (!title.trim()) return notify("Enter a title.");
+    setSaving(true);
+    try {
+      if (dirty) await onSave(v, { title: title.trim(), category });
+      if (thenNext && index < list.length - 1) onIndex(index + 1);
+      else if (!thenNext) notify("Saved.", "success");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return createPortal(
+    <div className="videoPreviewOverlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="videoPreviewPanel" onClick={(e) => e.stopPropagation()}>
+        <div className="videoPreviewHead">
+          <b>
+            Video {index + 1} of {list.length}
+          </b>
+          <button type="button" className="btn outline" onClick={onClose} aria-label="Close preview">
+            <X size={18} />
+          </button>
+        </div>
+        <video
+          key={v.id}
+          className="videoPreviewPlayer"
+          src={v.media_url}
+          poster={v.thumbnail_url || undefined}
+          controls
+          autoPlay
+          muted
+          playsInline
+          preload="metadata"
+        />
+        <label className="videoPreviewField">
+          Title
+          <input
+            className="input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save(true);
+            }}
+            placeholder="e.g. SS staircase railing, Margao"
+          />
+        </label>
+        <label className="videoPreviewField">
+          Category
+          <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {Array.from(new Set([...cats, "Other", v.category || "Other"])).map((c: string) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <div className="videoPreviewActions">
+          <button type="button" className="btn outline" onClick={() => onIndex(index - 1)} disabled={index === 0 || saving}>
+            <ChevronLeft size={16} /> Previous
+          </button>
+          <button type="button" className="btn light" onClick={() => save(false)} disabled={saving || !dirty}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button type="button" className="btn outline" onClick={() => save(true)} disabled={saving || index === list.length - 1}>
+            {dirty ? "Save & next" : "Next"} <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: any[]; refresh: () => void }) {
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
   const [queue, setQueue] = useState<{ file: File; title: string }[]>([]),
     [category, setCategory] = useState(""),
     [progress, setProgress] = useState<number | null>(null),
@@ -4603,21 +4711,30 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
           ordered.map((v: any, idx: number) => (
             <div className={`listItem${v.active ? "" : " isHidden"}`} key={v.id}>
               <div className="listItemMain">
-                {v.thumbnail_url ? (
-                  <img
-                    className="listThumb listThumbPortrait"
-                    src={v.thumbnail_url}
-                    alt=""
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                    }}
-                  />
-                ) : (
-                  <span className="listThumb listThumbPortrait listThumbEmpty">
-                    <Play size={16} />
+                <button
+                  type="button"
+                  className="videoThumbBtn"
+                  onClick={() => setPreviewIdx(idx)}
+                  aria-label={`Preview ${v.title}`}
+                  title="Tap to preview"
+                >
+                  {v.thumbnail_url ? (
+                    <img
+                      className="listThumb listThumbPortrait"
+                      src={v.thumbnail_url}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                      }}
+                    />
+                  ) : (
+                    <span className="listThumb listThumbPortrait listThumbEmpty" />
+                  )}
+                  <span className="videoThumbPlay" aria-hidden="true">
+                    <Play size={14} fill="currentColor" />
                   </span>
-                )}
+                </button>
                 <div>
                   <b>{v.title}</b>
                   <span>
@@ -4679,6 +4796,16 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
           <p className="muted">No videos yet. Upload one above or sync Instagram.</p>
         )}
       </div>
+      {previewIdx !== null && ordered[previewIdx] && (
+        <VideoPreviewModal
+          list={ordered}
+          index={previewIdx}
+          cats={cats}
+          onIndex={(i) => setPreviewIdx(Math.max(0, Math.min(ordered.length - 1, i)))}
+          onClose={() => setPreviewIdx(null)}
+          onSave={(v, changes) => save(v, changes)}
+        />
+      )}
       <ConfirmModal
         open={!!confirm}
         title={confirm?.title || ""}
