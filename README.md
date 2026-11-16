@@ -49,7 +49,7 @@ Migration `0038_seed_capital_upvc_content.sql` adds the 32 existing project phot
    - `ADMIN_HOST`: the hostname where you'll open `/admin`. To start, this can be your `*.workers.dev` hostname or the main domain. **The admin panel and its APIs return 404 until this is set.**
    - `RESEND_FROM_EMAIL`: for example, `Classic Steel <admin@yourdomain.com>`, using a domain verified in Resend.
    - `INSTAGRAM_APP_ID` and `INSTAGRAM_REDIRECT_URI`: the redirect URI is `https://<ADMIN_HOST>/api/instagram/callback`.
-   - `STORAGE_LIMIT_GB`: optional. The default is 10 GB of photos plus videos.
+   - `STORAGE_LIMIT_GB`: optional. The limit is 5 GB of photos plus videos (hard maximum; you can set it lower).
 5. Apply the migrations and deploy:
    ```bash
    npm run db:migrate

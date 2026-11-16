@@ -165,10 +165,12 @@ async function refreshInstagramMediaUrl(c: any, mediaId: string): Promise<string
   }
 }
 const PASSWORD_ITERATIONS = 100000;
-const DEFAULT_STORAGE_LIMIT_GB = 10;
+// Hard cap: total stored photos + videos can never exceed 5 GB (a lower STORAGE_LIMIT_GB is allowed).
+const MAX_STORAGE_LIMIT_GB = 5;
 function storageLimitBytes(env: Env) {
-  const gb = Number(env.STORAGE_LIMIT_GB || DEFAULT_STORAGE_LIMIT_GB);
-  return Math.round((Number.isFinite(gb) && gb > 0 ? gb : DEFAULT_STORAGE_LIMIT_GB) * 1024 * 1024 * 1024);
+  const gb = Number(env.STORAGE_LIMIT_GB || MAX_STORAGE_LIMIT_GB);
+  const capped = Number.isFinite(gb) && gb > 0 ? Math.min(gb, MAX_STORAGE_LIMIT_GB) : MAX_STORAGE_LIMIT_GB;
+  return Math.round(capped * 1024 * 1024 * 1024);
 }
 const MAX_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
 // Cloudflare Workers accept request bodies up to 100 MB on Free/Pro plans.
@@ -296,16 +298,34 @@ function setupOwnerEmails(env: Env) {
     .filter(Boolean);
 }
 let videoColumnsReady = false;
-async function storageUsed(c: any) {
+// Storage in use = the real total size of every file in the R2 bucket (photos, videos, covers, service images).
+// Listing is exact; the dashboard may reuse a result for up to 60 s, upload checks always list fresh.
+let r2UsageCache: { bytes: number; at: number } | null = null;
+function invalidateStorageCache() {
+  r2UsageCache = null;
+}
+async function r2BytesUsed(c: any, fresh = true) {
+  if (!c.env.MEDIA) return 0;
+  if (!fresh && r2UsageCache && Date.now() - r2UsageCache.at < 60_000) return r2UsageCache.bytes;
+  let total = 0;
+  let cursor: string | undefined;
+  for (let page = 0; page < 500; page++) {
+    const res: any = await c.env.MEDIA.list({ cursor, limit: 1000 });
+    for (const o of res.objects || []) total += Number(o.size || 0);
+    if (!res.truncated) break;
+    cursor = res.cursor;
+  }
+  r2UsageCache = { bytes: total, at: Date.now() };
+  return total;
+}
+async function storageUsed(c: any, fresh = true) {
   if (!videoColumnsReady) {
     await ensureVideoFileColumns(c);
     videoColumnsReady = true;
   }
-  const used: any = await c.env.DB.prepare(
-    "SELECT (SELECT COALESCE(SUM(bytes),0) FROM photos WHERE r2_key IS NOT NULL)+(SELECT COALESCE(SUM(bytes),0) FROM videos WHERE thumbnail_url LIKE '/media/%')+(SELECT COALESCE(SUM(file_bytes),0) FROM videos WHERE media_url LIKE '/media/%') bytes",
-  ).first();
-  return Number(used?.bytes || 0);
+  return r2BytesUsed(c, fresh);
 }
+
 async function reserveStorage(c: any, id: string, bytes: number) {
   if (!c.env.MEDIA) return true;
   const used = await storageUsed(c);
@@ -1059,7 +1079,7 @@ app.get("/api/admin/dashboard", requireAuth, async (c) => {
     c.env.DB.prepare("SELECT action,SUM(count) n FROM analytics_clicks WHERE day>=date('now','-30 days') GROUP BY action").all(),
     c.env.DB.prepare("SELECT COUNT(*) n FROM videos").first<any>(),
   ]);
-  const storageBytesUsed = await storageUsed(c);
+  const storageBytesUsed = await storageUsed(c, false);
   return c.json({
     photos: p?.n || 0,
     storageEnabled: Boolean(c.env.MEDIA),
@@ -1269,7 +1289,10 @@ app.put("/api/upload/:key", async (c) => {
       });
     }
     if (!stored || Number(stored.size) !== expected) throw new Error("size mismatch");
+    invalidateStorageCache();
     await c.env.DB.prepare("UPDATE upload_nonces SET uploaded_at=? WHERE id=?").bind(Date.now(), nonce).run();
+    // Service images have no separate "save" step: the file now counts via R2 itself, so drop its reservation.
+    if (key.startsWith("services/")) await releaseStorage(c, row.reservation_id || "");
     return c.json({ ok: true, key, reservationId: row.reservation_id });
   } catch (e) {
     await c.env.MEDIA.delete(key).catch(() => {});
@@ -1992,6 +2015,7 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       const stored = await c.env.MEDIA.put(videoKey, body, {
         httpMetadata: { contentType: ctype, cacheControl: "public,max-age=31536000,immutable" },
       });
+      invalidateStorageCache();
       const fileBytes = Number(stored?.size || declared || 0);
       if (!fileBytes) throw new Error("Downloaded video was empty");
       let posterPath = String(row.thumbnail_url || "").startsWith("/media/") ? String(row.thumbnail_url) : "";
