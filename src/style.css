@@ -7697,3 +7697,29 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   position: absolute;
   inset: 0;
 }
+
+/* Admin top bar on phones: solid in both themes so page content never shows through */
+@media (max-width: 700px) {
+  .admin aside {
+    background: var(--panel);
+    box-shadow: 0 6px 18px #0000002e;
+    scrollbar-width: none;
+  }
+  .admin aside::-webkit-scrollbar {
+    display: none;
+  }
+  [data-theme="dark"] .admin aside {
+    background: #11181d;
+    border-bottom-color: #2b363d;
+  }
+  [data-theme="dark"] .admin aside button {
+    color: #b9c4cc;
+  }
+  [data-theme="dark"] .admin aside button.active {
+    background: #e5a91b;
+    color: #0a1f33;
+  }
+  [data-theme="dark"] .admin aside button.active svg {
+    color: #0a1f33;
+  }
+}
