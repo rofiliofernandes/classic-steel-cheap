@@ -7834,3 +7834,20 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
 .homepageSectionNote {
   margin: -4px 0 16px;
 }
+.renameLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.renameLabel .muted {
+  font-weight: 400;
+}
+.videoPreviewField input:focus {
+  border-color: #e5a91b;
+  box-shadow: 0 0 0 3px #e5a91b33;
+}
+.btn.saveReady {
+  background: #e5a91b;
+  border-color: #e5a91b;
+  color: #0a1f33;
+}

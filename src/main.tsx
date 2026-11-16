@@ -24,6 +24,7 @@ import {
   Menu,
   Moon,
   Move,
+  Pencil,
   Phone,
   Play,
   Settings,
@@ -4829,7 +4830,9 @@ function VideoPreviewModal({
           preload="metadata"
         />
         <label className="videoPreviewField">
-          Title
+          <span className="renameLabel">
+            <Pencil size={14} /> Name <span className="muted">(tap to rename)</span>
+          </span>
           <input
             className="input"
             value={title}
@@ -4852,8 +4855,8 @@ function VideoPreviewModal({
           <button type="button" className="btn outline" onClick={() => onIndex(index - 1)} disabled={index === 0 || saving}>
             <ChevronLeft size={16} /> Previous
           </button>
-          <button type="button" className="btn light" onClick={() => save(false)} disabled={saving || !dirty}>
-            {saving ? "Saving…" : "Save"}
+          <button type="button" className={`btn light${dirty ? " saveReady" : ""}`} onClick={() => save(false)} disabled={saving || !dirty}>
+            {saving ? "Saving…" : "Save name"}
           </button>
           <button type="button" className="btn outline" onClick={() => save(true)} disabled={saving || index === list.length - 1}>
             {dirty ? "Save & next" : "Next"} <ChevronRight size={16} />
