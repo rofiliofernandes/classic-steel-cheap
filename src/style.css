@@ -7234,3 +7234,25 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
 .videoEmpty p {
   margin: 0;
 }
+.serviceProjectStrip {
+  margin: 4px 0 12px;
+  display: grid;
+  gap: 8px;
+}
+.serviceProjectThumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.serviceProjectThumbs img {
+  width: 92px;
+  height: 69px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+}
+.serviceProjectThumbs img.notShown {
+  opacity: 0.35;
+}

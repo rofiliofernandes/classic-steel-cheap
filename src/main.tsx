@@ -984,18 +984,19 @@ function parseImages(v: any): string[] {
     return [];
   }
 }
+const SERVICE_IMAGE_LIMIT = 10;
 function serviceSlides(s: any, photos: any[]) {
   const own = parseImages(s.images);
   const list = own.length ? own : s.image_url ? [s.image_url] : [];
   if (s.include_projects !== 0 && s.include_projects !== false) {
     const title = String(s.title || "").toLowerCase();
     for (const p of photos) {
-      if (list.length >= 12) break;
+      if (list.length >= SERVICE_IMAGE_LIMIT) break;
       if (String(p.category || p.occasion || "").toLowerCase() === title && p.image_url && !list.includes(p.image_url))
         list.push(p.image_url);
     }
   }
-  return list;
+  return list.slice(0, SERVICE_IMAGE_LIMIT);
 }
 function ServiceCard({ s, photos, offset }: { s: any; photos: any[]; offset: number }) {
   const slides = serviceSlides(s, photos);
@@ -3805,7 +3806,16 @@ function TestimonialsAdmin() {
     </>
   );
 }
-function ServicesAdmin({ services, refresh }: any) {
+function ServicesAdmin({ services, photos = [], refresh }: any) {
+  const projectPhotosFor = (title: string) =>
+    (photos as any[])
+      .filter(
+        (p) =>
+          (p.published === 1 || p.published === true) &&
+          String(p.category || p.occasion || "").toLowerCase() === String(title || "").toLowerCase() &&
+          p.image_url,
+      )
+      .map((p) => p.image_url as string);
   const empty = {
     id: "",
     title: "",
@@ -3845,9 +3855,19 @@ function ServicesAdmin({ services, refresh }: any) {
     let skipped = 0;
     // Every image already used on any service (and in this editor) — fingerprints are part of the file name.
     const known = [...form.images, ...services.flatMap((x: any) => parseImages(x.images))].join(" ");
+    const room = SERVICE_IMAGE_LIMIT - form.images.length;
+    if (room <= 0) {
+      notify(`This service already has ${SERVICE_IMAGE_LIMIT} images (the maximum). Remove one to add another.`);
+      return;
+    }
+    let tooMany = 0;
     try {
       for (let k = 0; k < files.length; k++) {
         setUploading(`Uploading ${k + 1} of ${files.length}…`);
+        if (added.length >= room) {
+          tooMany++;
+          continue;
+        }
         const fp = "img-" + (await fileHash(files[k])).slice(0, 20);
         if (known.includes(fp) || added.some((x) => x.includes(fp))) {
           skipped++;
@@ -3868,7 +3888,8 @@ function ServicesAdmin({ services, refresh }: any) {
     } catch (e: any) {
       notify(e.message);
     } finally {
-      if (added.length) setForm((f: any) => ({ ...f, images: [...f.images, ...added].slice(0, 20) }));
+      if (added.length) setForm((f: any) => ({ ...f, images: [...f.images, ...added].slice(0, SERVICE_IMAGE_LIMIT) }));
+      if (tooMany) notify(`Only ${SERVICE_IMAGE_LIMIT} images are allowed per service — ${tooMany} were not added.`);
       if (skipped) notify(`Skipped ${skipped} image${skipped === 1 ? "" : "s"} already used on the site.`);
       setUploading("");
       const el = document.querySelector<HTMLInputElement>(".serviceImageInput");
@@ -3955,7 +3976,9 @@ function ServicesAdmin({ services, refresh }: any) {
               </label>
             </div>
             <div className="serviceImagesHead">
-              <b>Card images</b>
+              <b>
+                Card images ({form.images.length}/{SERVICE_IMAGE_LIMIT})
+              </b>
               <span className="muted">They rotate automatically on the homepage. The first one shows first.</span>
             </div>
             <div className="serviceImagesGrid">
@@ -4002,6 +4025,26 @@ function ServicesAdmin({ services, refresh }: any) {
               />
               Also rotate through published project photos in the “{form.title || "this"}” category
             </label>
+            {form.include_projects &&
+              (() => {
+                const proj = projectPhotosFor(form.title).filter((u: string) => !form.images.includes(u));
+                const shown = Math.max(0, SERVICE_IMAGE_LIMIT - form.images.length);
+                return proj.length ? (
+                  <div className="serviceProjectStrip">
+                    <span className="muted">
+                      Project photos in “{form.title}” ({proj.length}) — managed in Projects &amp; Curation.
+                      {proj.length > shown ? ` The card shows ${shown} of them (${SERVICE_IMAGE_LIMIT} images max in total).` : ""}
+                    </span>
+                    <div className="serviceProjectThumbs">
+                      {proj.map((u: string, k: number) => (
+                        <img key={u + k} src={u} alt="" loading="lazy" className={k < shown ? "" : "notShown"} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted">No published project photos in “{form.title || "this"}” yet.</p>
+                );
+              })()}
             <label className="checkRow">
               <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
               Show this service on the website
@@ -4020,7 +4063,9 @@ function ServicesAdmin({ services, refresh }: any) {
                 Cancel
               </button>
             </div>
-            {form.id && form.images.length === 0 && <p className="muted">No images yet — the card shows an icon until you add one.</p>}
+            {form.id && form.images.length === 0 && !(form.include_projects && projectPhotosFor(form.title).length) && (
+              <p className="muted">No images yet — the card shows an icon until you add one.</p>
+            )}
           </div>
         ) : (
           <div className="panel videoSyncRow">
@@ -4037,11 +4082,14 @@ function ServicesAdmin({ services, refresh }: any) {
           {services.length ? (
             services.map((item: any) => {
               const imgs = parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [];
+              const proj = item.include_projects !== 0 ? projectPhotosFor(item.title).filter((u: string) => !imgs.includes(u)) : [];
+              const onCard = Math.min(SERVICE_IMAGE_LIMIT, imgs.length + proj.length);
+              const thumb = imgs[0] || proj[0];
               return (
                 <div className={`listItem${item.active === 0 ? " isHidden" : ""}`} key={item.id}>
                   <div className="listItemMain">
-                    {imgs[0] ? (
-                      <img className="listThumb" src={imgs[0]} alt="" loading="lazy" />
+                    {thumb ? (
+                      <img className="listThumb" src={thumb} alt="" loading="lazy" />
                     ) : (
                       <span className="listThumb listThumbEmpty">
                         <Upload size={16} />
@@ -4050,8 +4098,9 @@ function ServicesAdmin({ services, refresh }: any) {
                     <div>
                       <b>{item.title}</b>
                       <span>
-                        {imgs.length} image{imgs.length === 1 ? "" : "s"}
-                        {item.include_projects !== 0 ? " + project photos" : ""} · {item.instagram_hashtags || "no hashtags"}
+                        {onCard} image{onCard === 1 ? "" : "s"} on the card ({imgs.length} uploaded here
+                        {item.include_projects !== 0 ? ` + ${proj.length} project photo${proj.length === 1 ? "" : "s"}` : ""}) ·{" "}
+                        {item.instagram_hashtags || "no hashtags"}
                         {item.active === 0 ? " · Hidden" : ""}
                       </span>
                     </div>
@@ -5532,7 +5581,7 @@ function Admin() {
           {tab === "dashboard" && <Dashboard dash={dash} isOwner={user.role === "owner"} name={user.name} />}{" "}
           {tab === "gallery" && <Photos photos={photos} services={services} refresh={load} />}{" "}
           {tab === "homepage" && <HomepageAdmin photos={photos} services={services} homepage={homepage} refresh={load} />}{" "}
-          {tab === "services" && <ServicesAdmin services={services} refresh={load} />}{" "}
+          {tab === "services" && <ServicesAdmin services={services} photos={photos} refresh={load} />}{" "}
           {tab === "videos" && <VideosAdmin videos={videos} services={services} refresh={load} />}{" "}
           {tab === "testimonials" && <TestimonialsAdmin />}
           {tab === "festivals" && <FestivalsAdmin photos={photos} refresh={load} />}{" "}

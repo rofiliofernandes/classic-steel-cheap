@@ -2260,7 +2260,7 @@ app.post("/api/admin/services", requireAuth, async (c) => {
   const images: string[] = (Array.isArray(b.images) ? b.images : imageUrl ? [imageUrl] : [])
     .map((x: any) => textField(x, 2048))
     .filter((x: string) => x && validMediaUrl(x))
-    .slice(0, 20);
+    .slice(0, 10);
   const includeProjects = b.include_projects === false ? 0 : 1;
   const before: any = await c.env.DB.prepare("SELECT * FROM services WHERE id=?").bind(id).first();
   await c.env.DB.prepare(
