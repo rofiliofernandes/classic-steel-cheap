@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import {
   AppWindow,
-  ArrowDown,
+  GripVertical,
+  ChevronsUp,
   ArrowRight,
   ArrowUp,
   BarChart3,
@@ -4263,6 +4264,115 @@ function ServicePreviewModal({
     document.body,
   );
 }
+
+// Drag-and-drop ordering for admin lists. Press and drag the grip handle (works with touch and mouse); the new order is saved on drop.
+// Items in the list must carry data-reorder-item and data-reorder-id attributes.
+function useReorder(items: any[], onCommit: (ids: string[]) => Promise<void> | void) {
+  const key = items.map((i) => i.id).join("|");
+  const [order, setOrder] = useState<string[]>(() => items.map((i) => String(i.id)));
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [after, setAfter] = useState(false);
+  const st = useRef({ startY: 0, startScroll: 0, lastY: 0, ids: [] as string[], over: null as string | null, after: false });
+  useEffect(() => setOrder(items.map((i) => String(i.id))), [key]);
+  const byId: Record<string, any> = {};
+  items.forEach((i) => (byId[String(i.id)] = i));
+  const ordered = order.map((id) => byId[id]).filter(Boolean);
+  const calc = (id: string) => {
+    const y = st.current.lastY;
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reorder-item]")).filter(
+      (n) => n.dataset.reorderId !== id && st.current.ids.includes(String(n.dataset.reorderId)),
+    );
+    let target: string | null = null;
+    let isAfter = false;
+    for (const n of nodes) {
+      const r = n.getBoundingClientRect();
+      if (y < r.top + r.height / 2) {
+        target = String(n.dataset.reorderId);
+        isAfter = false;
+        break;
+      }
+      target = String(n.dataset.reorderId);
+      isAfter = true;
+    }
+    st.current.over = target;
+    st.current.after = isAfter;
+    setOverId(target);
+    setAfter(isAfter);
+    setOffset(y - st.current.startY + (window.scrollY - st.current.startScroll));
+  };
+  useEffect(() => {
+    if (!dragId) return;
+    // Scroll the page while dragging near the top or bottom edge.
+    const t = window.setInterval(() => {
+      const y = st.current.lastY;
+      const edge = 90;
+      if (y < edge) window.scrollBy(0, -Math.ceil((edge - y) / 6));
+      else if (y > window.innerHeight - edge) window.scrollBy(0, Math.ceil((y - (window.innerHeight - edge)) / 6));
+      else return;
+      calc(dragId);
+    }, 16);
+    return () => window.clearInterval(t);
+  }, [dragId]);
+  const finish = (commit: boolean) => {
+    const id = dragId;
+    if (!id) return;
+    const { over, after: aft } = st.current;
+    setDragId(null);
+    setOverId(null);
+    setOffset(0);
+    if (!commit || !over) return;
+    const rest = order.filter((x) => x !== id);
+    const at = rest.indexOf(over) + (aft ? 1 : 0);
+    const next = [...rest.slice(0, at), id, ...rest.slice(at)];
+    if (next.join("|") === order.join("|")) return;
+    setOrder(next);
+    Promise.resolve(onCommit(next)).catch(() => setOrder(items.map((i) => String(i.id))));
+  };
+  const moveTop = (id: string) => {
+    const next = [id, ...order.filter((x) => x !== id)];
+    if (next.join("|") === order.join("|")) return;
+    setOrder(next);
+    Promise.resolve(onCommit(next)).catch(() => setOrder(items.map((i) => String(i.id))));
+  };
+  const handleProps = (id: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      st.current = { startY: e.clientY, startScroll: window.scrollY, lastY: e.clientY, ids: order, over: null, after: false };
+      setDragId(id);
+      setOffset(0);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (dragId !== id) return;
+      st.current.lastY = e.clientY;
+      calc(id);
+    },
+    onPointerUp: () => finish(true),
+    onPointerCancel: () => finish(false),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      const i = order.indexOf(id);
+      const j = e.key === "ArrowUp" ? i - 1 : e.key === "ArrowDown" ? i + 1 : -1;
+      if (j < 0 || j >= order.length) return;
+      e.preventDefault();
+      const next = order.slice();
+      next.splice(i, 1);
+      next.splice(j, 0, id);
+      setOrder(next);
+      Promise.resolve(onCommit(next)).catch(() => setOrder(items.map((i2) => String(i2.id))));
+    },
+    style: { touchAction: "none" as const },
+  });
+  const itemProps = (id: string) => ({
+    "data-reorder-item": "1",
+    "data-reorder-id": id,
+    style: dragId === id ? { transform: `translateY(${offset}px)` } : undefined,
+    className: `${dragId === id ? " reorderDragging" : ""}${overId === id && dragId && dragId !== id ? (after ? " dropAfter" : " dropBefore") : ""}`,
+  });
+  return { ordered, dragId, handleProps, itemProps, moveTop };
+}
 function ServicesAdmin({ services, photos = [], refresh }: any) {
   const projectPhotosFor = (title: string) =>
     (photos as any[])
@@ -4290,6 +4400,15 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<any>(null);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const reorder = useReorder(services, async (ids) => {
+    try {
+      await api("/api/admin/services/reorder", { method: "POST", body: JSON.stringify({ ids }) });
+      refresh();
+    } catch (e: any) {
+      notify(e.message);
+      throw e;
+    }
+  });
   const quickSave = async (item: any, changes: any) => {
     try {
       await api("/api/admin/services", {
@@ -4597,7 +4716,7 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
         )}
         <div className="list">
           {services.length ? (
-            services.map((item: any) => {
+            reorder.ordered.map((item: any) => {
               const imgs = parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [];
               const hiddenP = parseImages(item.hidden_photos);
               const proj =
@@ -4607,8 +4726,23 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
               const onCard = Math.min(SERVICE_IMAGE_LIMIT, imgs.length + proj.length);
               const thumb = imgs[0] || proj[0];
               return (
-                <div className={`listItem${item.active === 0 ? " isHidden" : ""}`} key={item.id}>
+                <div
+                  className={`listItem${item.active === 0 ? " isHidden" : ""}${reorder.itemProps(item.id).className}`}
+                  key={item.id}
+                  data-reorder-item="1"
+                  data-reorder-id={item.id}
+                  style={reorder.itemProps(item.id).style}
+                >
                   <div className="listItemMain">
+                    <button
+                      type="button"
+                      className="reorderHandle"
+                      aria-label={`Drag to reorder ${item.title}. Arrow keys also move it.`}
+                      title="Press and drag to reorder"
+                      {...reorder.handleProps(item.id)}
+                    >
+                      <GripVertical size={20} />
+                    </button>
                     <button
                       type="button"
                       className="videoThumbBtn"
@@ -4636,6 +4770,9 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
                     </div>
                   </div>
                   <div className="listActions">
+                    <button className="btn outline" onClick={() => reorder.moveTop(item.id)} title="Move to the top">
+                      <ChevronsUp size={16} /> Top
+                    </button>
                     <button className="btn outline" onClick={() => edit(item)}>
                       Edit
                     </button>
@@ -5119,16 +5256,17 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
       notify(e.message);
     }
   };
-  const ordered = videos.slice().sort((a: any, b: any) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
-  const move = async (idx: number, dir: number) => {
-    const other = ordered[idx + dir];
-    const v = ordered[idx];
-    if (!other) return;
-    const a = Number(v.sort_order || 0),
-      b = Number(other.sort_order || 0);
-    await save(v, { sort_order: a === b ? b + dir : b });
-    await save(other, { sort_order: a === b ? a : a });
-  };
+  const sortedVideos = videos.slice().sort((a: any, b: any) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+  const reorder = useReorder(sortedVideos, async (ids) => {
+    try {
+      await api("/api/admin/videos/reorder", { method: "POST", body: JSON.stringify({ ids }) });
+      refresh();
+    } catch (e: any) {
+      notify(e.message);
+      throw e;
+    }
+  });
+  const ordered = reorder.ordered;
   const videoState = (v: any) => {
     if (String(v.platform) !== "instagram") return String(v.media_url || "").startsWith("/media/") ? "Uploaded" : "Starter video";
     if (String(v.media_url || "").startsWith("/media/")) return "Instagram · downloaded";
@@ -5256,8 +5394,23 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
       <div className="list">
         {ordered.length ? (
           ordered.map((v: any, idx: number) => (
-            <div className={`listItem${v.active ? "" : " isHidden"}`} key={v.id}>
+            <div
+              className={`listItem${v.active ? "" : " isHidden"}${reorder.itemProps(v.id).className}`}
+              key={v.id}
+              data-reorder-item="1"
+              data-reorder-id={v.id}
+              style={reorder.itemProps(v.id).style}
+            >
               <div className="listItemMain">
+                <button
+                  type="button"
+                  className="reorderHandle"
+                  aria-label={`Drag to reorder ${v.title}. Arrow keys also move it.`}
+                  title="Press and drag to reorder"
+                  {...reorder.handleProps(v.id)}
+                >
+                  <GripVertical size={20} />
+                </button>
                 <button
                   type="button"
                   className="videoThumbBtn"
@@ -5290,16 +5443,8 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
                 </div>
               </div>
               <div className="listActions">
-                <button className="btn outline" onClick={() => move(idx, -1)} disabled={idx === 0} aria-label={`Move ${v.title} up`}>
-                  <ArrowUp size={16} />
-                </button>
-                <button
-                  className="btn outline"
-                  onClick={() => move(idx, 1)}
-                  disabled={idx === ordered.length - 1}
-                  aria-label={`Move ${v.title} down`}
-                >
-                  <ArrowDown size={16} />
+                <button className="btn outline" onClick={() => reorder.moveTop(v.id)} disabled={idx === 0} title="Move to the top">
+                  <ChevronsUp size={16} /> Top
                 </button>
                 <select
                   className="input videoCatSelect"

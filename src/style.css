@@ -7914,3 +7914,39 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   height: min(86vh, 900px);
   width: auto;
 }
+
+/* Drag-and-drop ordering in admin lists */
+.reorderHandle {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted, #777);
+  cursor: grab;
+  border-radius: 8px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.reorderHandle:hover,
+.reorderHandle:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  color: #222;
+}
+.reorderDragging {
+  position: relative;
+  z-index: 50;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  opacity: 0.96;
+  cursor: grabbing;
+  pointer-events: none;
+}
+.listItem.dropBefore {
+  box-shadow: 0 -3px 0 0 #a8823f;
+}
+.listItem.dropAfter {
+  box-shadow: 0 3px 0 0 #a8823f;
+}

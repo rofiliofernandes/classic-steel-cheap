@@ -2394,6 +2394,32 @@ app.get("/api/admin/videos/check-hash", requireAuth, async (c) => {
 app.get("/api/admin/videos", requireAuth, async (c) =>
   c.json((await c.env.DB.prepare("SELECT * FROM videos ORDER BY sort_order,id").all()).results),
 );
+// Drag-and-drop ordering: the browser sends the full list of ids in the new order.
+async function applyOrder(c: any, table: "videos" | "services", ids: any): Promise<number> {
+  const list: string[] = (Array.isArray(ids) ? ids : [])
+    .map((x: any) => textField(x, 100))
+    .filter(Boolean)
+    .slice(0, 2000);
+  if (!list.length) return 0;
+  await c.env.DB.batch(list.map((id, i) => c.env.DB.prepare(`UPDATE ${table} SET sort_order=? WHERE id=?`).bind(i, id)));
+  return list.length;
+}
+app.post("/api/admin/videos/reorder", requireAuth, async (c) => {
+  const b: any = await c.req.json().catch(() => ({}));
+  const n = await applyOrder(c, "videos", b.ids);
+  if (!n) return c.json({ error: "Nothing to reorder" }, 400);
+  const me: any = c.get("admin");
+  await logActivity(c, me.id, me.name || me.email, "Reordered videos");
+  return c.json({ ok: true });
+});
+app.post("/api/admin/services/reorder", requireAuth, async (c) => {
+  const b: any = await c.req.json().catch(() => ({}));
+  const n = await applyOrder(c, "services", b.ids);
+  if (!n) return c.json({ error: "Nothing to reorder" }, 400);
+  const me: any = c.get("admin");
+  await logActivity(c, me.id, me.name || me.email, "Reordered services");
+  return c.json({ ok: true });
+});
 app.post("/api/admin/videos/:id/push-back", requireAuth, async (c) => {
   const id = c.req.param("id");
   const v: any = await c.env.DB.prepare("SELECT id,platform FROM videos WHERE id=?").bind(id).first();
