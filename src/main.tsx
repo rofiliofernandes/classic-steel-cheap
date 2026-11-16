@@ -2050,6 +2050,95 @@ function PickerThumb({ src }: { src: string }) {
   if (broken) return <span className="pickerThumbBroken" title="Not viewable here yet — still on Instagram's servers" />;
   return <img src={src} alt="" onError={() => setBroken(true)} />;
 }
+// Photo quality gate. Two signals that hold up in practice:
+//  - too small: forwarded / screenshotted / downloaded images are low-resolution (camera photos are 3000px+);
+//  - blurry: little edge detail even in the most detailed parts of the picture.
+const QUALITY_MIN_SHORT_SIDE = 600;
+const QUALITY_MIN_PIXELS = 480_000;
+const QUALITY_MIN_SHARPNESS = 90;
+function assessQuality(src: Blob | string): Promise<{ ok: boolean; issue: string; width: number; height: number; sharpness: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = typeof src === "string" ? src : URL.createObjectURL(src);
+    const done = (r: any) => {
+      if (typeof src !== "string") URL.revokeObjectURL(url);
+      resolve(r);
+    };
+    img.onload = () => {
+      try {
+        const W = img.naturalWidth,
+          H = img.naturalHeight;
+        // Measured near website display size, so blur that visitors would notice is what counts.
+        const s = Math.min(1, 1600 / Math.max(W, H));
+        const w = Math.max(8, Math.round(W * s)),
+          h = Math.max(8, Math.round(H * s));
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const x = c.getContext("2d", { willReadFrequently: true })!;
+        x.drawImage(img, 0, 0, w, h);
+        const d = x.getImageData(0, 0, w, h).data;
+        const g = new Float32Array(w * h);
+        for (let i = 0, k = 0; i < g.length; i++, k += 4) g[i] = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2];
+        // Laplacian variance per tile; average the most detailed quarter so plain walls/sky don't count as blur.
+        const T = 8,
+          tw = Math.floor((w - 2) / T),
+          th = Math.floor((h - 2) / T);
+        const tiles: number[] = [];
+        for (let ty = 0; ty < T; ty++)
+          for (let tx = 0; tx < T; tx++) {
+            let s1 = 0,
+              s2 = 0,
+              n = 0;
+            for (let y = 1 + ty * th; y < 1 + (ty + 1) * th; y++)
+              for (let xx = 1 + tx * tw; xx < 1 + (tx + 1) * tw; xx++) {
+                const k = y * w + xx;
+                const z = g[k - 1] + g[k + 1] + g[k - w] + g[k + w] - 4 * g[k];
+                s1 += z;
+                s2 += z * z;
+                n++;
+              }
+            if (n) tiles.push(s2 / n - (s1 / n) ** 2);
+          }
+        tiles.sort((a, b) => b - a);
+        const top = tiles.slice(0, Math.max(1, Math.floor(tiles.length / 4)));
+        const sharpness = top.reduce((a, b) => a + b, 0) / top.length;
+        let issue = "";
+        if (Math.min(W, H) < QUALITY_MIN_SHORT_SIDE || W * H < QUALITY_MIN_PIXELS) issue = `Low resolution (${W}×${H})`;
+        else if (sharpness < QUALITY_MIN_SHARPNESS) issue = "Blurry";
+        done({ ok: !issue, issue, width: W, height: H, sharpness });
+      } catch {
+        done({ ok: true, issue: "", width: 0, height: 0, sharpness: 0 });
+      }
+    };
+    img.onerror = () => done({ ok: true, issue: "", width: 0, height: 0, sharpness: 0 });
+    img.src = url;
+  });
+}
+// Checks photos that haven't been checked yet (Instagram imports, older uploads). Low-quality ones are
+// unpublished and moved to Pending with the reason, so nothing is deleted and you can approve one anyway.
+async function checkPhotoQuality(photos: any[], onStatus?: (t: string) => void) {
+  const todo = photos.filter(
+    (p) => !p.quality_checked && p.image_url && (String(p.image_url).startsWith("/") || String(p.image_url).startsWith(location.origin)),
+  );
+  let flagged = 0;
+  for (let i = 0; i < todo.length; i++) {
+    const p = todo[i];
+    onStatus?.(`Checking photo quality… ${i + 1} of ${todo.length}`);
+    const q = await assessQuality(p.image_url);
+    if (!q.width) continue; // couldn't load it; try again another time
+    const body: any = { quality_checked: true, quality_issue: q.issue };
+    if (!q.ok) {
+      body.published = false;
+      body.status = "pending";
+      flagged++;
+    }
+    try {
+      await api("/api/admin/photos/" + p.id, { method: "PATCH", body: JSON.stringify(body) });
+    } catch {}
+  }
+  return { checked: todo.length, flagged };
+}
 function scoreImage(file: File) {
   return new Promise<any>((resolve, reject) => {
     const img = new Image(),
@@ -2492,6 +2581,11 @@ function PhotoGroupCard({
           alt={group[idx]?.caption || "Photo"}
         />
         {live && <span className="photoLiveBadge">LIVE</span>}
+        {!live && group[0]?.quality_issue && (
+          <span className="photoQualityBadge" title={`${group[0].quality_issue} — approve it anyway if you're happy with it`}>
+            {String(group[0].quality_issue).startsWith("Blurry") ? "Blurry" : "Low resolution"}
+          </span>
+        )}
         {multi && (
           <span className="photoGroupCount">
             {idx + 1}/{group.length}
@@ -3360,6 +3454,31 @@ function StripAdmin({ photos, initial, refresh }: { photos: any[]; initial: any;
   );
 }
 function Photos({ photos, services, refresh }: { photos: any[]; services: any[]; refresh: () => void }) {
+  const [skipLowQuality, setSkipLowQuality] = useState(true);
+  const [qualityStatus, setQualityStatus] = useState("");
+  const qualityRunning = useRef(false);
+  const runQualityCheck = async (all: any[], announce: boolean) => {
+    if (qualityRunning.current) return;
+    qualityRunning.current = true;
+    try {
+      const r = await checkPhotoQuality(all, setQualityStatus);
+      if (r.flagged) {
+        notify(
+          `Moved ${r.flagged} blurry or low-resolution photo${r.flagged === 1 ? "" : "s"} to Pending (marked “Low quality”).`,
+          "success",
+        );
+        refresh();
+      } else if (announce && r.checked) notify(`Checked ${r.checked} photo${r.checked === 1 ? "" : "s"} — all look fine.`, "success");
+      else if (r.checked) refresh();
+    } finally {
+      setQualityStatus("");
+      qualityRunning.current = false;
+    }
+  };
+  // Automatically check any photos that haven't been checked yet (e.g. new Instagram imports).
+  useEffect(() => {
+    if (photos.some((p: any) => !p.quality_checked && "quality_checked" in p)) runQualityCheck(photos, false);
+  }, [photos.length]);
   const [category, setCategory] = useState(services[0]?.title || "SS Railing"),
     [link, setLink] = useState(""),
     [files, setFiles] = useState<File[]>([]),
@@ -3422,10 +3541,19 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
     const batchHashes: string[] = [];
     let uploaded = 0,
       duplicates = 0,
+      lowQuality = 0,
       failed = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
+        if (skipLowQuality) {
+          const q = await assessQuality(file);
+          if (!q.ok) {
+            lowQuality++;
+            setBatchProgress({ done: i + 1, total: files.length });
+            continue;
+          }
+        }
         const webp = await toWebp(file);
         const score = await scoreImage(webp);
         if (isDuplicatePhash(score.phash, existingHashes) || isDuplicatePhash(score.phash, batchHashes)) {
@@ -3457,6 +3585,7 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
             status: "pending",
             published: false,
             ...score,
+            quality_checked: 1,
             bytes: webp.size,
           }),
         });
@@ -3472,7 +3601,7 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
     if (el) el.value = "";
     refresh();
     notify(
-      `Uploaded ${uploaded} to ${category}.${duplicates ? ` Skipped ${duplicates} as duplicate(s) already in your library.` : ""}${failed ? ` ${failed} failed.` : ""}`,
+      `Uploaded ${uploaded} to ${category}.${duplicates ? ` Skipped ${duplicates} as duplicate(s) already in your library.` : ""}${lowQuality ? ` Skipped ${lowQuality} blurry or low-resolution photo${lowQuality === 1 ? "" : "s"}.` : ""}${failed ? ` ${failed} failed.` : ""}`,
       "success",
     );
     setUploading(false);
@@ -3587,7 +3716,7 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
             try {
               const r = await runInstagramSync((t) => setIgSyncBusy(t));
               notify(
-                `Instagram sync complete: ${r.totalPhotos} new photos, ${r.totalVideos} new videos, ${r.downloaded} videos downloaded.${r.pending ? ` ${r.pending} still downloading in the background.` : ""}`,
+                `Instagram sync complete: ${r.totalPhotos} new photos, ${r.totalVideos} new videos, ${r.downloaded} videos downloaded.${r.pending ? ` ${r.pending} still downloading in the background.` : ""} New photos are checked for blur automatically.`,
                 "success",
               );
               refresh();
@@ -3600,6 +3729,11 @@ function Photos({ photos, services, refresh }: { photos: any[]; services: any[];
         >
           <Instagram size={17} /> {igSyncBusy || "Sync Instagram"}
         </button>
+        <label className="checkRow qualityToggle">
+          <input type="checkbox" checked={skipLowQuality} onChange={(e) => setSkipLowQuality(e.target.checked)} />
+          Skip blurry or low-resolution photos when uploading
+        </label>
+        {qualityStatus && <span className="syncStatus">{qualityStatus}</span>}
         <button className="btn outline" onClick={materializeAll} disabled={materializeBusy}>
           {materializeBusy
             ? batchProgress
@@ -4168,7 +4302,8 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
       notify(`This service already has ${SERVICE_IMAGE_LIMIT} images (the maximum). Remove one to add another.`);
       return;
     }
-    let tooMany = 0;
+    let tooMany = 0,
+      lowQ = 0;
     try {
       for (let k = 0; k < files.length; k++) {
         setUploading(`Uploading ${k + 1} of ${files.length}…`);
@@ -4179,6 +4314,11 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
         const fp = "img-" + (await fileHash(files[k])).slice(0, 20);
         if (known.includes(fp) || added.some((x) => x.includes(fp))) {
           skipped++;
+          continue;
+        }
+        const q = await assessQuality(files[k]);
+        if (!q.ok) {
+          lowQ++;
           continue;
         }
         const webp = await toWebp(files[k]);
@@ -4199,6 +4339,7 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
       if (added.length) setForm((f: any) => ({ ...f, images: [...f.images, ...added].slice(0, SERVICE_IMAGE_LIMIT) }));
       if (tooMany) notify(`Only ${SERVICE_IMAGE_LIMIT} images are allowed per service — ${tooMany} were not added.`);
       if (skipped) notify(`Skipped ${skipped} image${skipped === 1 ? "" : "s"} already used on the site.`);
+      if (lowQ) notify(`Skipped ${lowQ} blurry or low-resolution image${lowQ === 1 ? "" : "s"}.`);
       setUploading("");
       const el = document.querySelector<HTMLInputElement>(".serviceImageInput");
       if (el) el.value = "";

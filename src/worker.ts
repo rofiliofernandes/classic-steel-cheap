@@ -2162,6 +2162,8 @@ app.patch("/api/admin/photos/:id", requireAuth, async (c) => {
     if (String(b.caption).length > 2000) return c.json({ error: "Caption is too long" }, 400);
     out.caption = textField(b.caption, 2000);
   }
+  if ("quality_checked" in b) out.quality_checked = b.quality_checked ? 1 : 0;
+  if ("quality_issue" in b) out.quality_issue = textField(b.quality_issue, 120);
   if ("total_score" in b) {
     const n = Number(b.total_score);
     if (!Number.isFinite(n) || n < -100000 || n > 100000) return c.json({ error: "Invalid score" }, 400);

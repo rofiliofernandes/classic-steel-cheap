@@ -7808,3 +7808,26 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
     height: 54px;
   }
 }
+.photoQualityBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  background: #c0392b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.qualityToggle {
+  margin: 0 4px;
+}
+.photoQualityBadge {
+  max-width: calc(100% - 70px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
