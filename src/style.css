@@ -7831,3 +7831,6 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   font-size: 11px;
   letter-spacing: 0.02em;
 }
+.homepageSectionNote {
+  margin: -4px 0 16px;
+}

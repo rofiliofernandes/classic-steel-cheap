@@ -5981,29 +5981,28 @@ function ActivityLogPanel() {
   );
 }
 function HomepageAdmin({ photos, services, homepage, refresh }: { photos: any[]; services: any[]; homepage: any; refresh: () => void }) {
-  const [section, setSection] = useState<"hero" | "strip" | "gallery">("hero");
+  const [section, setSection] = useState<"hero" | "strip">("hero");
   return (
     <>
       <div className="modes homepageSectionTabs">
         <button className={section === "hero" ? "sel" : ""} onClick={() => setSection("hero")}>
-          Hero
+          Top slideshow
         </button>
         <button className={section === "strip" ? "sel" : ""} onClick={() => setSection("strip")}>
-          About
-        </button>
-        <button className={section === "gallery" ? "sel" : ""} onClick={() => setSection("gallery")}>
-          Gallery
+          “Why Classic Steel” section
         </button>
       </div>
+      <p className="muted homepageSectionNote">
+        {section === "hero"
+          ? "The big photos that slide behind your headline at the very top of the homepage."
+          : "The text and rotating photos in the “Why Classic Steel” section, just below the top slideshow."}
+      </p>
       {section === "hero" && <HeroAdmin photos={homepage.photos || photos} initial={homepage.hero} refresh={refresh} />}
       {section === "strip" && (
         <>
           <AboutTextAdmin initial={homepage.about} refresh={refresh} />
           <StripAdmin photos={homepage.photos || photos} initial={homepage.strip} refresh={refresh} />
         </>
-      )}
-      {section === "gallery" && (
-        <GallerySlotsEditor services={services} photos={homepage.photos || photos} initial={homepage.gallery} refresh={refresh} />
       )}
     </>
   );
