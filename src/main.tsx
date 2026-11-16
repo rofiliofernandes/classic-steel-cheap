@@ -18,6 +18,7 @@ import {
   Grid3x3,
   FolderOpen,
   Home as HomeIcon,
+  Image as ImageIcon,
   Instagram,
   LogOut,
   Mail,
@@ -1790,12 +1791,16 @@ function Gallery() {
     return j === -1 ? 99 : 50 + j;
   };
   const cats = ["All", ...Array.from(new Set<string>([...photos.map(catOf), ...videos.map(catOf)])).sort((a, b) => order(a) - order(b))];
-  const [cat, setCat] = useState(() => {
-    const q = new URLSearchParams(location.search).get("category");
-    return q || "All";
-  });
+  // SS Railing is shown first unless a category is picked (or given in the link).
+  const [pickedCat, setCat] = useState<string | null>(() => new URLSearchParams(location.search).get("category"));
+  const cat = pickedCat ?? (cats.includes("SS Railing") ? "SS Railing" : "All");
+  const [pickedKind, setKind] = useState<"videos" | "photos" | null>(null);
   const shownPhotos = cat === "All" ? photos : photos.filter((p: any) => catOf(p) === cat);
   const shownVideos = cat === "All" ? videos : videos.filter((v: any) => catOf(v) === cat);
+  // Keep the chosen tab while it has items; otherwise show whichever one does.
+  const countOf = (k: "videos" | "photos") => (k === "videos" ? shownVideos.length : shownPhotos.length);
+  const kind: "videos" | "photos" =
+    pickedKind && countOf(pickedKind) ? pickedKind : shownVideos.length || !shownPhotos.length ? "videos" : "photos";
   return (
     <>
       <Nav page="projects" />
@@ -1811,11 +1816,33 @@ function Gallery() {
           </button>
         ))}
       </div>
-      {shownVideos.length > 0 && <h2 className="projectBlockTitle">Videos</h2>}
-      <ProjectVideoPlayer videos={shownVideos} />
-      {shownPhotos.length > 0 && <h2 className="projectBlockTitle">Photos</h2>}
-      <ProjectPhotoViewer photos={shownPhotos} />
-      {!shownPhotos.length && !shownVideos.length && <div className="galleryNoPhotos">No projects in this category yet.</div>}
+      <div className="kindToggle" role="tablist" aria-label="Show videos or photos">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={kind === "videos"}
+          className={kind === "videos" ? "active" : ""}
+          onClick={() => setKind("videos")}
+        >
+          <Play size={20} /> Videos <em>{shownVideos.length}</em>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={kind === "photos"}
+          className={kind === "photos" ? "active" : ""}
+          onClick={() => setKind("photos")}
+        >
+          <ImageIcon size={20} /> Photos <em>{shownPhotos.length}</em>
+        </button>
+      </div>
+      {kind === "videos" ? <ProjectVideoPlayer videos={shownVideos} /> : <ProjectPhotoViewer photos={shownPhotos} />}
+      {(kind === "videos" ? !shownVideos.length : !shownPhotos.length) && (
+        <div className="galleryNoPhotos">
+          No {kind} in {cat === "All" ? "projects" : cat} yet.
+          {(kind === "videos" ? shownPhotos.length : shownVideos.length) > 0 && " Try the other tab."}
+        </div>
+      )}
       <QuoteBand />
       <Footer data={data} />
       <WhatsAppWidget />

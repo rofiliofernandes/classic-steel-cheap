@@ -7950,3 +7950,54 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
 .listItem.dropAfter {
   box-shadow: 0 3px 0 0 #a8823f;
 }
+
+/* Projects page: big Videos / Photos switch */
+.kindToggle {
+  display: flex;
+  width: min(520px, calc(100% - 40px));
+  margin: 0 auto 26px;
+  padding: 6px;
+  gap: 6px;
+  background: #ece6d6;
+  border-radius: 18px;
+}
+.kindToggle button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 58px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #3b3f43;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.kindToggle button em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.kindToggle button.active {
+  background: #202326;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+.kindToggle button.active em {
+  background: rgba(255, 255, 255, 0.22);
+}
+@media (max-width: 700px) {
+  .kindToggle button {
+    min-height: 54px;
+    font-size: 16px;
+    gap: 8px;
+  }
+}
