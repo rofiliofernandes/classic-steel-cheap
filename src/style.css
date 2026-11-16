@@ -7763,3 +7763,48 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   font-weight: 400;
   resize: vertical;
 }
+
+/* Projects page: swipeable photo viewer (same look as the video player) */
+.projectBlockTitle {
+  width: min(1100px, calc(100% - 32px));
+  margin: 18px auto 10px;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #a8823f;
+  font-family: inherit;
+}
+.projectPhotoStage {
+  cursor: zoom-in;
+}
+.projectPhotoMain {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  animation: photoIn 0.35s ease;
+}
+@keyframes photoIn {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.projectPhotoThumbs button {
+  width: 92px;
+  height: 68px;
+}
+@media (max-width: 700px) {
+  .projectPhotoStage {
+    aspect-ratio: 4 / 5;
+  }
+  .projectPhotoThumbs button {
+    width: 72px;
+    height: 54px;
+  }
+}

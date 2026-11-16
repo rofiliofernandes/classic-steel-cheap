@@ -1535,6 +1535,92 @@ function Home() {
   );
 }
 
+function ProjectPhotoViewer({ photos }: { photos: any[] }) {
+  const [active, setActive] = useState(0);
+  const [zoom, setZoom] = useState<any>(null);
+  const touchX = useRef<number | null>(null);
+  const thumbsRef = useRef<HTMLDivElement>(null);
+  const n = photos.length;
+  const key = photos.map((p) => p.id).join("|");
+  useEffect(() => setActive(0), [key]);
+  useEffect(() => {
+    // Keep the active thumbnail in view.
+    const el = thumbsRef.current?.querySelector<HTMLElement>("button.active");
+    el?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  }, [active]);
+  useEffect(() => {
+    if (zoom) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && /input|textarea|select/i.test(t.tagName)) return;
+      if (e.key === "ArrowRight") setActive((x) => (x + 1) % Math.max(1, n));
+      if (e.key === "ArrowLeft") setActive((x) => (x - 1 + Math.max(1, n)) % Math.max(1, n));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [n, zoom]);
+  if (!n) return null;
+  const p = photos[Math.min(active, n - 1)];
+  const go = (d: number) => setActive((x) => (((x + d) % n) + n) % n);
+  return (
+    <section className="projectVideo projectPhotos">
+      <div
+        className="projectVideoStage projectPhotoStage"
+        onTouchStart={(e) => {
+          touchX.current = e.touches[0].clientX;
+        }}
+        onTouchEnd={(e) => {
+          if (touchX.current == null) return;
+          const dx = e.changedTouches[0].clientX - touchX.current;
+          touchX.current = null;
+          if (Math.abs(dx) > 45 && n > 1) go(dx < 0 ? 1 : -1);
+        }}
+      >
+        <img className="projectVideoBackdrop" src={p.image_url} alt="" aria-hidden="true" />
+        <img
+          key={p.id}
+          className="projectPhotoMain"
+          src={p.image_url}
+          alt={p.caption || p.category || "Classic Steel project"}
+          onClick={() => setZoom(p)}
+        />
+        {n > 1 && (
+          <>
+            <button type="button" className="projectVideoArrow prev" onClick={() => go(-1)} aria-label="Previous photo">
+              <ChevronLeft size={24} />
+            </button>
+            <button type="button" className="projectVideoArrow next" onClick={() => go(1)} aria-label="Next photo">
+              <ChevronRight size={24} />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="projectVideoMeta">
+        <b>{p.caption || p.category || "Project photo"}</b>
+        <span>
+          Photo {Math.min(active, n - 1) + 1} of {n}
+          {n > 1 ? " · swipe or use the arrows · tap to enlarge" : " · tap to enlarge"}
+        </span>
+      </div>
+      {n > 1 && (
+        <div className="projectVideoThumbs projectPhotoThumbs" ref={thumbsRef}>
+          {photos.map((x, k) => (
+            <button
+              type="button"
+              key={x.id || k}
+              className={k === active ? "active" : ""}
+              onClick={() => setActive(k)}
+              aria-label={`Show photo ${k + 1}`}
+            >
+              <img src={x.image_url} alt="" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
+      {zoom && <Lightbox photo={zoom} onClose={() => setZoom(null)} />}
+    </section>
+  );
+}
 function ProjectVideoPlayer({ videos }: { videos: any[] }) {
   const [active, setActive] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -1676,7 +1762,7 @@ function Gallery() {
       <section className="galleryPageHead">
         <small>PROJECTS</small>
         <h1>Real work. Different spaces.</h1>
-        <p>Pick a category to see its videos and photos. Tap any photo to view it larger.</p>
+        <p>Pick a category, then swipe through its videos and photos.</p>
       </section>
       <div className="galleryFilter">
         {(cats as string[]).map((c) => (
@@ -1685,8 +1771,11 @@ function Gallery() {
           </button>
         ))}
       </div>
+      {shownVideos.length > 0 && <h2 className="projectBlockTitle">Videos</h2>}
       <ProjectVideoPlayer videos={shownVideos} />
-      {shownPhotos.length || !shownVideos.length ? <ImageGrid photos={shownPhotos} limit={shownPhotos.length || 15} /> : null}
+      {shownPhotos.length > 0 && <h2 className="projectBlockTitle">Photos</h2>}
+      <ProjectPhotoViewer photos={shownPhotos} />
+      {!shownPhotos.length && !shownVideos.length && <div className="galleryNoPhotos">No projects in this category yet.</div>}
       <QuoteBand />
       <Footer data={data} />
       <WhatsAppWidget />
