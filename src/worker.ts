@@ -2797,6 +2797,8 @@ const CLICK_ACTIONS = new Set([
   "whatsapp_contact_form",
   "whatsapp_band",
   "whatsapp_footer",
+  "instagram_footer",
+  "facebook_footer",
   "quote_nav",
   "quote_hero",
   "quote_footer",

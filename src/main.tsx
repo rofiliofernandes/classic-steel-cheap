@@ -19,6 +19,7 @@ import {
   FolderOpen,
   Home as HomeIcon,
   Image as ImageIcon,
+  Facebook,
   Instagram,
   LogOut,
   Mail,
@@ -75,6 +76,8 @@ function useDocumentMeta(title: string, description: string) {
     m.setAttribute("content", description);
   }, [title, description]);
 }
+const INSTAGRAM_URL = "https://www.instagram.com/invites/contact/?utm_source=ig_contact_invite&utm_medium=copy_link&utm_content=g59osug";
+const FACEBOOK_URL = "https://www.facebook.com/share/1E3Tu6yKcR/";
 const CATS = ["SS Railing", "MS Gate & Grill", "Safety Door", "Roof Shed", "Aluminium Windows", "Glass Work", "Fabrication"];
 
 async function api(path: string, opt: any = {}) {
@@ -1476,7 +1479,6 @@ function WhatsAppWidget() {
   );
 }
 function Footer({ data }: { data: any }) {
-  const ig = instagramUrl(data);
   return (
     <footer className="csFooter" id="contact">
       <div className="referenceWrap csFooterGrid">
@@ -1519,16 +1521,30 @@ function Footer({ data }: { data: any }) {
               {formatPhone(PHONES[0])}
             </span>
           </a>
-          {ig && (
-            <a className="csFooterAction" href={ig} target="_blank" rel="noreferrer">
-              <span className="csFooterIcon">
-                <Instagram size={16} />
-              </span>
-              <span>
-                <small>Instagram</small>@{String(data?.instagramUsername || "")}
-              </span>
-            </a>
-          )}
+          <a
+            className="csFooterAction"
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => trackClick("instagram_footer")}
+          >
+            <span className="csFooterIcon">
+              <Instagram size={16} />
+            </span>
+            <span>
+              <small>Follow us on</small>
+              Instagram
+            </span>
+          </a>
+          <a className="csFooterAction" href={FACEBOOK_URL} target="_blank" rel="noreferrer" onClick={() => trackClick("facebook_footer")}>
+            <span className="csFooterIcon">
+              <Facebook size={16} />
+            </span>
+            <span>
+              <small>Follow us on</small>
+              Facebook
+            </span>
+          </a>
         </div>
         <div className="csFooterCol">
           <h3>Visit us</h3>
