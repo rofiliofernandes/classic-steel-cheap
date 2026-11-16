@@ -36,6 +36,8 @@ import {
   Sun,
   Trash2,
   Upload,
+  Volume2,
+  VolumeX,
   Warehouse,
   Wrench,
   X,
@@ -503,6 +505,10 @@ function GalleryTile({
       )}
     </div>
   );
+}
+// Videos are silent unless the admin turned sound on for them (muted = 0).
+function isMuted(v: any) {
+  return !(v?.muted === 0 || v?.muted === false);
 }
 // A photo the admin has cropped (position or zoom moved off the default) is shown cropped, in the same 4:5 frame as the crop preview.
 function hasCrop(p: any) {
@@ -1237,6 +1243,7 @@ function VideoGallery({ data }: { data: any }) {
                     className="reelPosterVideo"
                     src={v.media_url}
                     poster={v.thumbnail_url || undefined}
+                    muted={isMuted(v)}
                     playsInline
                     preload="metadata"
                     aria-label={v.title || "Project video"}
@@ -1715,6 +1722,7 @@ function ProjectVideoPlayer({ videos }: { videos: any[] }) {
           ref={ref}
           src={v.media_url}
           poster={v.thumbnail_url || undefined}
+          muted={isMuted(v)}
           playsInline
           preload="metadata"
           aria-label={v.title || "Project video"}
@@ -5276,7 +5284,15 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
     try {
       await api("/api/admin/videos", {
         method: "POST",
-        body: JSON.stringify({ id: v.id, title: v.title, category: v.category, active: !!v.active, sort_order: v.sort_order, ...changes }),
+        body: JSON.stringify({
+          id: v.id,
+          title: v.title,
+          category: v.category,
+          active: !!v.active,
+          sort_order: v.sort_order,
+          muted: isMuted(v),
+          ...changes,
+        }),
       });
       refresh();
     } catch (e: any) {
@@ -5491,6 +5507,14 @@ function VideosAdmin({ videos, services, refresh }: { videos: any[]; services: a
                   }}
                 >
                   Rename
+                </button>
+                <button
+                  className={`btn outline soundBtn${isMuted(v) ? "" : " soundOn"}`}
+                  onClick={() => save(v, { muted: !isMuted(v) })}
+                  title={isMuted(v) ? "Plays without sound. Click to turn sound on." : "Plays with sound. Click to mute."}
+                  aria-label={`${v.title}: sound is ${isMuted(v) ? "off" : "on"}`}
+                >
+                  {isMuted(v) ? <VolumeX size={16} /> : <Volume2 size={16} />} {isMuted(v) ? "Muted" : "Sound on"}
                 </button>
                 <button className="btn outline" onClick={() => save(v, { active: !v.active })}>
                   {v.active ? "Hide" : "Show"}

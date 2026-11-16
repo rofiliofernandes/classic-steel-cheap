@@ -742,12 +742,22 @@ function getActiveFestivalKey(now: Date = istNow(), movableDates: Record<string,
   }
   return null;
 }
+// Videos play muted unless the admin turns sound on for that video. The column is added on first use (no migration to run).
+let mutedColumnReady = false;
+async function ensureMutedColumn(c: any) {
+  if (mutedColumnReady) return;
+  try {
+    await c.env.DB.prepare("ALTER TABLE videos ADD COLUMN muted INTEGER NOT NULL DEFAULT 1").run();
+  } catch {}
+  mutedColumnReady = true;
+}
 app.get("/api/public", async (c) => {
   await ensureV3Schema(c);
+  await ensureMutedColumn(c);
   const [s, v, p, settings, igRow, reviewsData] = await Promise.all([
     c.env.DB.prepare("SELECT * FROM services WHERE active=1 ORDER BY sort_order,id").all(),
     c.env.DB.prepare(
-      "SELECT id,title,platform,category,thumbnail_url,media_url,source_url,sort_order FROM videos WHERE active=1 AND platform IN ('upload','instagram') AND media_url IS NOT NULL AND media_url<>'' AND (platform='upload' OR media_url LIKE '/media/%') ORDER BY sort_order,id",
+      "SELECT id,title,platform,category,thumbnail_url,media_url,source_url,sort_order,muted FROM videos WHERE active=1 AND platform IN ('upload','instagram') AND media_url IS NOT NULL AND media_url<>'' AND (platform='upload' OR media_url LIKE '/media/%') ORDER BY sort_order,id",
     ).all(),
     c.env.DB.prepare(
       "SELECT id,source,source_id,image_url,caption,occasion,category,created_at,group_id,group_order,total_score,focal_x,focal_y,focal_zoom,focal_x_mobile,focal_y_mobile,focal_zoom_mobile,focal_x_hero,focal_y_hero,focal_zoom_hero,focal_x_hero_mobile,focal_y_hero_mobile,focal_zoom_hero_mobile,excluded_from_auto FROM photos WHERE published=1 ORDER BY created_at DESC LIMIT 300",
@@ -2455,6 +2465,7 @@ async function claimUploadedObject(c: any, key: string, reservationId: string, p
 }
 app.post("/api/admin/videos", requireAuth, async (c) => {
   await ensureVideoFileColumns(c);
+  await ensureMutedColumn(c);
   let b: any;
   try {
     b = await c.req.json();
@@ -2468,8 +2479,15 @@ app.post("/api/admin/videos", requireAuth, async (c) => {
   if (b.id) {
     const existing: any = await c.env.DB.prepare("SELECT id,title FROM videos WHERE id=?").bind(String(b.id)).first();
     if (!existing) return c.json({ error: "Video not found" }, 404);
-    await c.env.DB.prepare("UPDATE videos SET title=?,category=?,active=?,sort_order=? WHERE id=?")
-      .bind(title || existing.title, category, b.active === false ? 0 : 1, boundedInt(b.sort_order, -10000, 10000, 0), existing.id)
+    await c.env.DB.prepare("UPDATE videos SET title=?,category=?,active=?,sort_order=?,muted=? WHERE id=?")
+      .bind(
+        title || existing.title,
+        category,
+        b.active === false ? 0 : 1,
+        boundedInt(b.sort_order, -10000, 10000, 0),
+        b.muted === false || b.muted === 0 ? 0 : 1,
+        existing.id,
+      )
       .run();
     await logActivity(c, me.id, me.name || me.email, `Updated video "${title || existing.title}"`);
     return c.json({ ok: true, id: existing.id });

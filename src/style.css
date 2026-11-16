@@ -8001,3 +8001,14 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
     gap: 8px;
   }
 }
+
+.soundBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.soundBtn.soundOn {
+  background: #1f3a5f;
+  color: #fff;
+  border-color: #1f3a5f;
+}
