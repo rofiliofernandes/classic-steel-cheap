@@ -1858,27 +1858,18 @@ function Gallery() {
   );
 }
 
-const REQUIREMENTS = [
-  "SS Railing",
-  "MS Gate & Grill",
-  "Safety Door",
-  "Roof Shed",
-  "Aluminium Windows",
-  "Glass Work",
-  "Other fabrication",
-  "Not sure — need advice",
-];
-function requirementFromParam(v: string | null) {
-  const s = String(v || "").toLowerCase();
-  if (!s) return REQUIREMENTS[0];
-  if (s.includes("rail")) return "SS Railing";
-  if (s.includes("gate") || s.includes("grill")) return "MS Gate & Grill";
-  if (s.includes("door")) return "Safety Door";
-  if (s.includes("shed") || s.includes("roof")) return "Roof Shed";
-  if (s.includes("window")) return "Aluminium Windows";
-  if (s.includes("glass")) return "Glass Work";
-  if (s.includes("fabric")) return "Other fabrication";
-  return REQUIREMENTS[0];
+// The enquiry form offers every service shown on the website (so a service added in admin appears here automatically), plus two general choices.
+const EXTRA_REQUIREMENTS = ["Something else", "Not sure — need advice"];
+function requirementFromParam(v: string | null, options: string[]) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (!s) return options[0];
+  return (
+    options.find((o) => o.toLowerCase() === s) ||
+    options.find((o) => o.toLowerCase().includes(s) || s.includes(o.toLowerCase())) ||
+    options[0]
+  );
 }
 function ContactPage() {
   const data = usePublicData();
@@ -1886,16 +1877,20 @@ function ContactPage() {
     "Contact | Classic Steel, Cuncolim Goa",
     "Call, WhatsApp or send an enquiry to Classic Steel in Cuncolim, Goa for SS railings, MS gates & grills, safety doors, roof sheds and fabrication.",
   );
-  const [form, setForm] = useState(() => ({
+  const serviceNames: string[] = ((data.services || []) as any[]).map((x: any) => String(x.title || "").trim()).filter(Boolean);
+  const requirements = [...(serviceNames.length ? serviceNames : CATS), ...EXTRA_REQUIREMENTS];
+  const [form, setForm] = useState<{ name: string; phone: string; service: string | null; details: string }>({
     name: "",
     phone: "",
-    service: requirementFromParam(new URLSearchParams(location.search).get("service")),
+    service: null,
     details: "",
-  }));
+  });
+  // Until a chip is tapped, preselect the service from the link (?service=…) or the first service.
+  const chosenService = form.service ?? requirementFromParam(new URLSearchParams(location.search).get("service"), requirements);
   const [sent, setSent] = useState(false);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const message = `Hello Classic Steel,\n\nName: ${form.name}\nPhone: ${form.phone}\nRequirement: ${form.service}\nDetails: ${form.details}`;
+    const message = `Hello Classic Steel,\n\nName: ${form.name}\nPhone: ${form.phone}\nRequirement: ${chosenService}\nDetails: ${form.details}`;
     trackClick("whatsapp_contact_form");
     window.open(`${WA}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     setSent(true);
@@ -1966,16 +1961,16 @@ function ContactPage() {
               <div className="reqField" role="radiogroup" aria-label="What do you need?">
                 <span className="reqLabel">What do you need?</span>
                 <div className="reqChips">
-                  {REQUIREMENTS.map((r) => (
+                  {requirements.map((r) => (
                     <button
                       type="button"
                       key={r}
                       role="radio"
-                      aria-checked={form.service === r}
-                      className={`reqChip${form.service === r ? " active" : ""}`}
+                      aria-checked={chosenService === r}
+                      className={`reqChip${chosenService === r ? " active" : ""}`}
                       onClick={() => setForm({ ...form, service: r })}
                     >
-                      {form.service === r && <Check size={14} />}
+                      {chosenService === r && <Check size={14} />}
                       {r}
                     </button>
                   ))}
