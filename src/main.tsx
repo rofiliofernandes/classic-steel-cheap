@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   DoorOpen,
+  Eye,
   Fence,
   Grid3x3,
   FolderOpen,
@@ -3865,6 +3866,141 @@ function TestimonialsAdmin() {
     </>
   );
 }
+// Tap a service thumbnail in the admin: see the card's rotating images, then fix its name/description.
+function ServicePreviewModal({
+  list,
+  index,
+  slidesFor,
+  onIndex,
+  onClose,
+  onSave,
+  onEditImages,
+}: {
+  list: any[];
+  index: number;
+  slidesFor: (s: any) => string[];
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onSave: (s: any, changes: any) => Promise<void>;
+  onEditImages: (s: any) => void;
+}) {
+  const item = list[index];
+  const slides = item ? slidesFor(item) : [];
+  const [k, setK] = useState(0);
+  const [title, setTitle] = useState(item?.title || "");
+  const [description, setDescription] = useState(item?.description || "");
+  const [saving, setSaving] = useState(false);
+  const touchX = useRef<number | null>(null);
+  useEffect(() => {
+    setK(0);
+    setTitle(item?.title || "");
+    setDescription(item?.description || "");
+  }, [item?.id]);
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const t = setInterval(() => setK((x) => (x + 1) % slides.length), 3500);
+    return () => clearInterval(t);
+  }, [slides.length, item?.id]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, []);
+  if (!item) return null;
+  const n = slides.length;
+  const go = (d: number) => n && setK((x) => (x + d + n) % n);
+  const dirty = title.trim() !== String(item.title || "") || description.trim() !== String(item.description || "");
+  const save = async (thenNext: boolean) => {
+    if (!title.trim()) return notify("Enter a service name.");
+    setSaving(true);
+    try {
+      if (dirty) await onSave(item, { title: title.trim(), description: description.trim() });
+      if (thenNext && index < list.length - 1) onIndex(index + 1);
+      else if (!thenNext) notify("Saved.", "success");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return createPortal(
+    <div className="videoPreviewOverlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="videoPreviewPanel" onClick={(e) => e.stopPropagation()}>
+        <div className="videoPreviewHead">
+          <b>
+            Service {index + 1} of {list.length}
+          </b>
+          <button type="button" className="btn outline" onClick={onClose} aria-label="Close preview">
+            <X size={18} />
+          </button>
+        </div>
+        <div
+          className="servicePreviewStage"
+          onTouchStart={(e) => {
+            touchX.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            if (touchX.current == null) return;
+            const dx = e.changedTouches[0].clientX - touchX.current;
+            touchX.current = null;
+            if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+          }}
+        >
+          {n ? (
+            slides.map((src, j) => <img key={src + j} src={src} alt="" className={j === k ? "active" : ""} />)
+          ) : (
+            <ServiceIcon title={item.title} />
+          )}
+          {n > 1 && (
+            <>
+              <button type="button" className="serviceArrow prev" onClick={() => go(-1)} aria-label="Previous image">
+                <ChevronLeft size={18} />
+              </button>
+              <button type="button" className="serviceArrow next" onClick={() => go(1)} aria-label="Next image">
+                <ChevronRight size={18} />
+              </button>
+              <span className="serviceDots" aria-hidden="true">
+                {slides.map((_, j) => (
+                  <i key={j} className={j === k ? "active" : ""} />
+                ))}
+              </span>
+            </>
+          )}
+        </div>
+        <p className="muted servicePreviewCount">
+          {n ? `Image ${k + 1} of ${n} on the homepage card` : "No images yet — the card shows an icon."}
+        </p>
+        <label className="videoPreviewField">
+          Name
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="videoPreviewField">
+          Short description
+          <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+        <button type="button" className="btn outline" onClick={() => onEditImages(item)}>
+          <Upload size={16} /> Edit images &amp; more
+        </button>
+        <div className="videoPreviewActions">
+          <button type="button" className="btn outline" onClick={() => onIndex(index - 1)} disabled={index === 0 || saving}>
+            <ChevronLeft size={16} /> Previous
+          </button>
+          <button type="button" className="btn light" onClick={() => save(false)} disabled={saving || !dirty}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button type="button" className="btn outline" onClick={() => save(true)} disabled={saving || index === list.length - 1}>
+            {dirty ? "Save & next" : "Next"} <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 function ServicesAdmin({ services, photos = [], refresh }: any) {
   const projectPhotosFor = (title: string) =>
     (photos as any[])
@@ -3890,6 +4026,30 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
   const [uploading, setUploading] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<any>(null);
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const quickSave = async (item: any, changes: any) => {
+    try {
+      await api("/api/admin/services", {
+        method: "POST",
+        body: JSON.stringify({
+          id: item.id,
+          title: item.title,
+          description: item.description || "",
+          instagram_hashtags: item.instagram_hashtags || "",
+          images: parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [],
+          include_projects: item.include_projects !== 0 && item.include_projects !== false,
+          active: item.active !== 0 && item.active !== false,
+          sort_order: item.sort_order || 0,
+          price: 0,
+          ...changes,
+        }),
+      });
+      refresh();
+    } catch (e: any) {
+      notify(e.message);
+      throw e;
+    }
+  };
   const edit = (item: any) => {
     setForm({
       id: item.id,
@@ -4147,13 +4307,22 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
               return (
                 <div className={`listItem${item.active === 0 ? " isHidden" : ""}`} key={item.id}>
                   <div className="listItemMain">
-                    {thumb ? (
-                      <img className="listThumb" src={thumb} alt="" loading="lazy" />
-                    ) : (
-                      <span className="listThumb listThumbEmpty">
-                        <Upload size={16} />
+                    <button
+                      type="button"
+                      className="videoThumbBtn"
+                      onClick={() => setPreviewIdx(services.indexOf(item))}
+                      aria-label={`Preview ${item.title}`}
+                      title="Tap to preview"
+                    >
+                      {thumb ? (
+                        <img className="listThumb" src={thumb} alt="" loading="lazy" />
+                      ) : (
+                        <span className="listThumb listThumbEmpty" />
+                      )}
+                      <span className="videoThumbPlay" aria-hidden="true">
+                        <Eye size={14} />
                       </span>
-                    )}
+                    </button>
                     <div>
                       <b>{item.title}</b>
                       <span>
@@ -4180,6 +4349,20 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
           )}
         </div>
       </div>
+      {previewIdx !== null && services[previewIdx] && (
+        <ServicePreviewModal
+          list={services}
+          index={previewIdx}
+          slidesFor={(it: any) => serviceSlides(it, photos as any[])}
+          onIndex={(i) => setPreviewIdx(Math.max(0, Math.min(services.length - 1, i)))}
+          onClose={() => setPreviewIdx(null)}
+          onSave={quickSave}
+          onEditImages={(it: any) => {
+            setPreviewIdx(null);
+            edit(it);
+          }}
+        />
+      )}
       <ConfirmModal
         open={!!confirm}
         title={confirm?.title || ""}
