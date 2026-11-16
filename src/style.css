@@ -7245,16 +7245,57 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   overflow-x: auto;
   padding-bottom: 4px;
 }
-.serviceProjectThumbs img {
+.projThumb {
+  position: relative;
   width: 92px;
   height: 69px;
+  flex: 0 0 auto;
+}
+.projThumb img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: 8px;
-  flex: 0 0 auto;
   border: 1px solid var(--line);
+  display: block;
 }
-.serviceProjectThumbs img.notShown {
-  opacity: 0.35;
+.projThumb.notShown img {
+  opacity: 0.4;
+}
+.projThumb.isHidden img {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+.projThumbBtn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #333;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.projThumb.isHidden .projThumbBtn {
+  background: #1f3a5f;
+  color: #fff;
+}
+.projThumbTag {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 /* Admin: tap a video thumbnail to preview + rename */

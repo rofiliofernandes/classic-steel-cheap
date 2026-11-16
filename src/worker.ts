@@ -2269,9 +2269,13 @@ app.post("/api/admin/services", requireAuth, async (c) => {
     .filter((x: string) => x && validMediaUrl(x))
     .slice(0, 10);
   const includeProjects = b.include_projects === false ? 0 : 1;
+  const hiddenPhotos: string[] = (Array.isArray(b.hidden_photos) ? b.hidden_photos : [])
+    .map((x: any) => textField(x, 2048))
+    .filter((x: string) => x && validMediaUrl(x))
+    .slice(0, 500);
   const before: any = await c.env.DB.prepare("SELECT * FROM services WHERE id=?").bind(id).first();
   await c.env.DB.prepare(
-    `INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags,images,include_projects) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,description=excluded.description,price=excluded.price,image_url=excluded.image_url,active=excluded.active,sort_order=excluded.sort_order,instagram_hashtags=excluded.instagram_hashtags,images=excluded.images,include_projects=excluded.include_projects`,
+    `INSERT INTO services(id,title,description,price,image_url,active,sort_order,instagram_hashtags,images,include_projects,hidden_photos) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,description=excluded.description,price=excluded.price,image_url=excluded.image_url,active=excluded.active,sort_order=excluded.sort_order,instagram_hashtags=excluded.instagram_hashtags,images=excluded.images,include_projects=excluded.include_projects,hidden_photos=excluded.hidden_photos`,
   )
     .bind(
       id,
@@ -2284,6 +2288,7 @@ app.post("/api/admin/services", requireAuth, async (c) => {
       instagramHashtags,
       JSON.stringify(images),
       includeProjects,
+      JSON.stringify(hiddenPhotos),
     )
     .run();
   // Remove uploaded image files that were taken off this service.

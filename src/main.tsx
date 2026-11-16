@@ -993,8 +993,10 @@ function serviceSlides(s: any, photos: any[]) {
   const list = own.length ? own : s.image_url ? [s.image_url] : [];
   if (s.include_projects !== 0 && s.include_projects !== false) {
     const title = String(s.title || "").toLowerCase();
+    const hidden = parseImages(s.hidden_photos);
     for (const p of photos) {
       if (list.length >= SERVICE_IMAGE_LIMIT) break;
+      if (hidden.includes(p.image_url)) continue;
       if (String(p.category || p.occasion || "").toLowerCase() === title && p.image_url && !list.includes(p.image_url))
         list.push(p.image_url);
     }
@@ -4259,6 +4261,7 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
     instagram_hashtags: "",
     images: [] as string[],
     include_projects: true,
+    hidden_photos: [] as string[],
     active: true,
     sort_order: 0,
   };
@@ -4279,6 +4282,7 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
           instagram_hashtags: item.instagram_hashtags || "",
           images: parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [],
           include_projects: item.include_projects !== 0 && item.include_projects !== false,
+          hidden_photos: parseImages(item.hidden_photos),
           active: item.active !== 0 && item.active !== false,
           sort_order: item.sort_order || 0,
           price: 0,
@@ -4299,6 +4303,7 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
       instagram_hashtags: item.instagram_hashtags || "",
       images: parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [],
       include_projects: item.include_projects !== 0 && item.include_projects !== false,
+      hidden_photos: parseImages(item.hidden_photos),
       active: item.active !== 0 && item.active !== false,
       sort_order: item.sort_order || 0,
     });
@@ -4495,17 +4500,43 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
             {form.include_projects &&
               (() => {
                 const proj = projectPhotosFor(form.title).filter((u: string) => !form.images.includes(u));
+                const hidden: string[] = form.hidden_photos || [];
+                const visible = proj.filter((u: string) => !hidden.includes(u));
                 const shown = Math.max(0, SERVICE_IMAGE_LIMIT - form.images.length);
+                const toggle = (u: string) =>
+                  setForm((f: any) => {
+                    const h: string[] = f.hidden_photos || [];
+                    return { ...f, hidden_photos: h.includes(u) ? h.filter((x) => x !== u) : [...h, u] };
+                  });
                 return proj.length ? (
                   <div className="serviceProjectStrip">
                     <span className="muted">
-                      Project photos in “{form.title}” ({proj.length}) — managed in Projects &amp; Curation.
-                      {proj.length > shown ? ` The card shows ${shown} of them (${SERVICE_IMAGE_LIMIT} images max in total).` : ""}
+                      Project photos in “{form.title}” — tap ✕ to hide a photo from this card, ↺ to bring it back. Hidden photos stay on the
+                      Projects page.
+                      {visible.length > shown
+                        ? ` The card shows ${shown} of the ${visible.length} (${SERVICE_IMAGE_LIMIT} images max in total).`
+                        : ""}
                     </span>
                     <div className="serviceProjectThumbs">
-                      {proj.map((u: string, k: number) => (
-                        <img key={u + k} src={u} alt="" loading="lazy" className={k < shown ? "" : "notShown"} />
-                      ))}
+                      {proj.map((u: string, k: number) => {
+                        const isHidden = hidden.includes(u);
+                        const idx = visible.indexOf(u);
+                        return (
+                          <div key={u + k} className={`projThumb${isHidden ? " isHidden" : idx >= shown ? " notShown" : ""}`}>
+                            <img src={u} alt="" loading="lazy" />
+                            {isHidden && <span className="projThumbTag">Hidden</span>}
+                            <button
+                              type="button"
+                              className="projThumbBtn"
+                              aria-label={isHidden ? "Show this photo on the card" : "Hide this photo from the card"}
+                              title={isHidden ? "Show on card" : "Hide from card"}
+                              onClick={() => toggle(u)}
+                            >
+                              {isHidden ? "↺" : "✕"}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -4549,7 +4580,11 @@ function ServicesAdmin({ services, photos = [], refresh }: any) {
           {services.length ? (
             services.map((item: any) => {
               const imgs = parseImages(item.images).length ? parseImages(item.images) : item.image_url ? [item.image_url] : [];
-              const proj = item.include_projects !== 0 ? projectPhotosFor(item.title).filter((u: string) => !imgs.includes(u)) : [];
+              const hiddenP = parseImages(item.hidden_photos);
+              const proj =
+                item.include_projects !== 0
+                  ? projectPhotosFor(item.title).filter((u: string) => !imgs.includes(u) && !hiddenP.includes(u))
+                  : [];
               const onCard = Math.min(SERVICE_IMAGE_LIMIT, imgs.length + proj.length);
               const thumb = imgs[0] || proj[0];
               return (
