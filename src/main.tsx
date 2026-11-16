@@ -1383,6 +1383,23 @@ function QuoteBand() {
 }
 function WhatsAppWidget() {
   const [open, setOpen] = useState(false);
+  const widgetRef = useRef<HTMLDivElement>(null);
+  // Close the chat box when tapping/clicking anywhere outside it, or pressing Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (widgetRef.current && !widgetRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   const [showTop, setShowTop] = useState(false);
   useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 500);
@@ -1399,7 +1416,7 @@ function WhatsAppWidget() {
       >
         <ArrowUp size={20} />
       </button>
-      <div className="waWidget">
+      <div className="waWidget" ref={widgetRef}>
         {open && (
           <div className="waPanel">
             <div className="waPanelHead">
