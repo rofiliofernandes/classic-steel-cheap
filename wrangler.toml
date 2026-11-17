@@ -25,14 +25,13 @@ bucket_name = "classic-steel-media"
 SITE_NAME = "Capital UPVC Windows & Doors"
 PHONE = "7048235723"
 MAPS_URL = "https://maps.app.goo.gl/MStEk8sBR9QoNXGu7"
-# Total storage allowed for uploaded/downloaded photos and videos (in GB).
-STORAGE_LIMIT_GB = "10"
 # Set these once your domain is connected, e.g. admin.capitalupvc.com
 ADMIN_HOST = "classic-steel-cheap.rofitest8.workers.dev"
-INSTAGRAM_APP_ID = ""
 INSTAGRAM_REDIRECT_URI = ""
 INSTAGRAM_GRAPH_VERSION = "v24.0"
 RESEND_FROM_EMAIL = ""
+INSTAGRAM_APP_ID = "29282313471432868"
+INSTAGRAM_CONFIG_ID = "1458056229804690"
 
 [triggers]
 # Twice a day: sync Instagram photos/videos and download any queued videos.
