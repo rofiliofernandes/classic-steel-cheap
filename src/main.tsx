@@ -1528,7 +1528,7 @@ function Footer({ data }: { data: any }) {
             rel="noreferrer"
             onClick={() => trackClick("instagram_footer")}
           >
-            <span className="csFooterIcon">
+            <span className="csFooterIcon ig">
               <Instagram size={16} />
             </span>
             <span>
@@ -1537,7 +1537,7 @@ function Footer({ data }: { data: any }) {
             </span>
           </a>
           <a className="csFooterAction" href={FACEBOOK_URL} target="_blank" rel="noreferrer" onClick={() => trackClick("facebook_footer")}>
-            <span className="csFooterIcon">
+            <span className="csFooterIcon fb">
               <Facebook size={16} />
             </span>
             <span>

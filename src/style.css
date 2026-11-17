@@ -7508,6 +7508,16 @@ html:not([data-theme="dark"]) .youtubeGallery .referenceVisit {
   border-color: #25d366;
   color: #fff;
 }
+.csFooterIcon.ig {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%);
+  border-color: transparent;
+  color: #fff;
+}
+.csFooterIcon.fb {
+  background: #1877f2;
+  border-color: #1877f2;
+  color: #fff;
+}
 .csFooterAction:hover .csFooterIcon {
   border-color: #e5a91b;
 }

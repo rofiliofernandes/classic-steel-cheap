@@ -20,6 +20,7 @@ type Env = {
   INSTAGRAM_GRAPH_VERSION?: string;
   INSTAGRAM_APP_ID?: string;
   INSTAGRAM_APP_SECRET?: string;
+  INSTAGRAM_CONFIG_ID?: string;
   INSTAGRAM_REDIRECT_URI?: string;
   STORAGE_LIMIT_GB?: string;
 };
@@ -110,6 +111,14 @@ async function decryptToken(env: Env, value: string) {
     throw e;
   }
 }
+// Newer Meta apps only offer "Unified login": a Facebook Login for Business dialog with a configuration id, and the API lives on graph.facebook.com.
+// Older apps use Instagram Login and graph.instagram.com. The mode follows whether INSTAGRAM_CONFIG_ID is set.
+function igUnified(c: any) {
+  return !!String(c.env.INSTAGRAM_CONFIG_ID || "").trim();
+}
+function igHost(c: any) {
+  return igUnified(c) ? "https://graph.facebook.com" : "https://graph.instagram.com";
+}
 async function instagramRedirect(c: any) {
   return c.env.INSTAGRAM_REDIRECT_URI || new URL("/api/instagram/callback", c.req.url).toString();
 }
@@ -132,6 +141,7 @@ async function getInstagramConnection(c: any) {
 }
 async function refreshInstagramToken(c: any, conn: any) {
   if (!conn?.access_token) return conn;
+  if (igUnified(c)) return conn;
   const version = c.env.INSTAGRAM_GRAPH_VERSION || "v24.0";
   if (conn.expires_at && Number(conn.expires_at) - Date.now() > 7 * 86400000) return conn;
   if (!c.env.INSTAGRAM_APP_SECRET) return conn;
@@ -153,7 +163,7 @@ async function refreshInstagramMediaUrl(c: any, mediaId: string): Promise<string
     if (!conn) return null;
     const fresh = await refreshInstagramToken(c, conn);
     const version = c.env.INSTAGRAM_GRAPH_VERSION || "v24.0";
-    const u = new URL(`https://graph.instagram.com/${version}/${encodeURIComponent(mediaId)}`);
+    const u = new URL(`${igHost(c)}/${version}/${encodeURIComponent(mediaId)}`);
     u.searchParams.set("fields", "media_url");
     u.searchParams.set("access_token", fresh.access_token);
     const r = await fetch(u);
@@ -442,6 +452,18 @@ async function instagramAuthorize(c: any) {
   const state = uid();
   const sig = await hmac(c.env, state);
   setCookie(c, "ig_oauth_state", `${state}.${sig}`, { httpOnly: true, secure: true, sameSite: "Lax", path: "/api/instagram", maxAge: 600 });
+  if (igUnified(c)) {
+    const f = new URL("https://www.facebook.com/dialog/oauth");
+    f.searchParams.set("client_id", c.env.INSTAGRAM_APP_ID);
+    f.searchParams.set("config_id", String(c.env.INSTAGRAM_CONFIG_ID).trim());
+    f.searchParams.set("display", "popup");
+    f.searchParams.set("override_default_response_type", "true");
+    f.searchParams.set("redirect_uri", await instagramRedirect(c));
+    f.searchParams.set("response_type", "code");
+    f.searchParams.set("state", state);
+    f.searchParams.set("prompt", "login");
+    return c.redirect(f.toString(), 302);
+  }
   const u = new URL("https://www.instagram.com/oauth/authorize");
   u.searchParams.set("force_reauth", "true");
   u.searchParams.set("client_id", c.env.INSTAGRAM_APP_ID);
@@ -510,40 +532,79 @@ app.get("/api/instagram/callback", async (c) => {
     return c.text("Instagram app credentials are not configured on this Worker.", 500);
   const redirectUri = await instagramRedirect(c);
   try {
-    const shortResp = await fetch("https://api.instagram.com/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: c.env.INSTAGRAM_APP_ID,
-        client_secret: c.env.INSTAGRAM_APP_SECRET,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-        code,
-      }),
-    });
-    const short: any = await shortResp.json();
-    if (!shortResp.ok || !short.access_token)
-      throw new Error(short?.error_message || short?.error?.message || "Instagram token exchange failed");
-    const longUrl = new URL("https://graph.instagram.com/access_token");
-    longUrl.searchParams.set("grant_type", "ig_exchange_token");
-    longUrl.searchParams.set("client_secret", c.env.INSTAGRAM_APP_SECRET);
-    longUrl.searchParams.set("access_token", short.access_token);
-    const longResp = await fetch(longUrl);
-    const long: any = await longResp.json();
-    if (!longResp.ok || !long.access_token)
-      throw new Error(long?.error?.message || long?.error_message || "Instagram long-lived token exchange failed");
+    let accessToken = "";
+    let igId = "";
+    let igUsername = "";
+    let expiresAt = 0;
     const version = c.env.INSTAGRAM_GRAPH_VERSION || "v24.0";
-    const meUrl = new URL(`https://graph.instagram.com/${version}/me`);
-    meUrl.searchParams.set("fields", "id,username");
-    meUrl.searchParams.set("access_token", long.access_token);
-    const meResp = await fetch(meUrl);
-    const me: any = await meResp.json();
-    if (!meResp.ok || !me.id) throw new Error(me?.error?.message || "Could not read the connected Instagram account");
-    const expiresAt = Date.now() + Number(long.expires_in || 5184000) * 1000;
+    if (igUnified(c)) {
+      // Unified login: the code is exchanged at graph.facebook.com, then the connected Instagram account is looked up.
+      const tUrl = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
+      tUrl.searchParams.set("client_id", c.env.INSTAGRAM_APP_ID);
+      tUrl.searchParams.set("client_secret", c.env.INSTAGRAM_APP_SECRET);
+      tUrl.searchParams.set("redirect_uri", redirectUri);
+      tUrl.searchParams.set("code", code);
+      const tResp = await fetch(tUrl);
+      const tok: any = await tResp.json().catch(() => ({}));
+      if (!tResp.ok || !tok.access_token) throw new Error(tok?.error?.message || "Instagram token exchange failed");
+      accessToken = String(tok.access_token);
+      expiresAt = tok.expires_in ? Date.now() + Number(tok.expires_in) * 1000 : 0;
+      let account: any = null;
+      for (const path of ["me/assigned_instagram_accounts", "me/instagram_accounts"]) {
+        const aUrl = new URL(`https://graph.facebook.com/${version}/${path}`);
+        aUrl.searchParams.set("fields", "id,username");
+        aUrl.searchParams.set("access_token", accessToken);
+        const aResp = await fetch(aUrl);
+        const aData: any = await aResp.json().catch(() => ({}));
+        if (aResp.ok && Array.isArray(aData.data) && aData.data.length) {
+          account = aData.data[0];
+          break;
+        }
+      }
+      if (!account?.id)
+        throw new Error(
+          "No Instagram account was shared with this app. Make sure the account is a Business or Creator account and select it when asked.",
+        );
+      igId = String(account.id);
+      igUsername = String(account.username || "");
+    } else {
+      const shortResp = await fetch("https://api.instagram.com/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: c.env.INSTAGRAM_APP_ID,
+          client_secret: c.env.INSTAGRAM_APP_SECRET,
+          grant_type: "authorization_code",
+          redirect_uri: redirectUri,
+          code,
+        }),
+      });
+      const short: any = await shortResp.json();
+      if (!shortResp.ok || !short.access_token)
+        throw new Error(short?.error_message || short?.error?.message || "Instagram token exchange failed");
+      const longUrl = new URL("https://graph.instagram.com/access_token");
+      longUrl.searchParams.set("grant_type", "ig_exchange_token");
+      longUrl.searchParams.set("client_secret", c.env.INSTAGRAM_APP_SECRET);
+      longUrl.searchParams.set("access_token", short.access_token);
+      const longResp = await fetch(longUrl);
+      const long: any = await longResp.json();
+      if (!longResp.ok || !long.access_token)
+        throw new Error(long?.error?.message || long?.error_message || "Instagram long-lived token exchange failed");
+      const meUrl = new URL(`https://graph.instagram.com/${version}/me`);
+      meUrl.searchParams.set("fields", "id,username");
+      meUrl.searchParams.set("access_token", long.access_token);
+      const meResp = await fetch(meUrl);
+      const me: any = await meResp.json();
+      if (!meResp.ok || !me.id) throw new Error(me?.error?.message || "Could not read the connected Instagram account");
+      accessToken = String(long.access_token);
+      igId = String(me.id);
+      igUsername = String(me.username || "");
+      expiresAt = Date.now() + Number(long.expires_in || 5184000) * 1000;
+    }
     await c.env.DB.prepare(
       `INSERT INTO instagram_integrations(provider,user_id,username,access_token_enc,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(provider) DO UPDATE SET user_id=excluded.user_id,username=excluded.username,access_token_enc=excluded.access_token_enc,expires_at=excluded.expires_at,updated_at=CURRENT_TIMESTAMP`,
     )
-      .bind("instagram", String(me.id), String(me.username || ""), await encryptToken(c.env, String(long.access_token)), expiresAt)
+      .bind("instagram", igId, igUsername, await encryptToken(c.env, accessToken), expiresAt || null)
       .run();
     if (connectToken) {
       const consumed: any = await c.env.DB.prepare(
@@ -557,7 +618,7 @@ app.get("/api/instagram/callback", async (c) => {
     }
     deleteCookie(c, "ig_connect_token", { path: "/api/instagram" });
     return c.html(
-      `<h2>Instagram connected successfully</h2><p>Connected account: <strong>${String(me.username || me.id).replace(/[<>]/g, "")}</strong></p><p>You can close this window and return to the website.</p>`,
+      `<h2>Instagram connected successfully</h2><p>Connected account: <strong>${(igUsername || igId).replace(/[<>]/g, "")}</strong></p><p>You can close this window and return to the website.</p>`,
     );
   } catch (e: any) {
     console.error("INSTAGRAM_OAUTH_ERROR", e?.name || "Error", e?.message || String(e));
@@ -1334,7 +1395,7 @@ async function syncInstagramData(c: any, startCursor?: string, disableEarlyExit?
   const version = c.env.INSTAGRAM_GRAPH_VERSION || "v24.0";
   let endpoint =
     startCursor ||
-    `https://graph.instagram.com/${version}/${encodeURIComponent(conn.user_id)}/media?fields=id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,width,height,children{media_type,media_url,thumbnail_url,id}&limit=50&access_token=${encodeURIComponent(conn.access_token)}`;
+    `${igHost(c)}/${version}/${encodeURIComponent(conn.user_id)}/media?fields=id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,width,height,children{media_type,media_url,thumbnail_url,id}&limit=50&access_token=${encodeURIComponent(conn.access_token)}`;
   await ensureCategoryAliasSchema(c);
   const serviceRows: any[] = (
     await c.env.DB.prepare("SELECT title,instagram_hashtags FROM services WHERE active=1 ORDER BY sort_order,id").all()
@@ -1997,7 +2058,7 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       let videoUrl = String(row.media_url || "");
       let thumbUrl = String(row.thumbnail_url || "").startsWith("/media/") ? "" : String(row.thumbnail_url || "");
       if (conn && row.video_id) {
-        const u = new URL(`https://graph.instagram.com/${version}/${encodeURIComponent(row.video_id)}`);
+        const u = new URL(`${igHost(c)}/${version}/${encodeURIComponent(row.video_id)}`);
         u.searchParams.set("fields", "media_url,thumbnail_url");
         u.searchParams.set("access_token", conn.access_token);
         const r = await fetch(u);
