@@ -918,16 +918,16 @@ async function sendSetupCode(c: any, email: string, code: string) {
     throw new Error(detail || "Could not send verification email");
   }
 }
-async function sendAdminInvitation(c: any, email: string, url: string) {
+async function sendAdminInvitation(c: any, email: string, url: string, owner = false, fromName = "") {
   if (!c.env.RESEND_API_KEY || !c.env.RESEND_FROM_EMAIL)
     throw new Error("Email invitations are not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to the Worker.");
   const body = emailWrapper(
-    `<h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:20px;color:#14181b">You're invited</h2><p style="margin:0 0 22px;color:#5b6167">You've been invited to join the Classic Steel website admin team. Click below to verify your email and set your own password.</p><div style="text-align:center;margin:26px 0"><a href="${url}" style="display:inline-block;background:#14181b;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.5px">Verify email &amp; create account</a></div><p style="margin:0;color:#8a8478;font-size:13px">This invitation expires in 12 hours. If you didn't expect this, you can safely ignore this email.</p>`,
+    `<h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:20px;color:#14181b">You're invited</h2><p style="margin:0 0 22px;color:#5b6167">${owner ? `${fromName.replace(/[<>&]/g, "") || "The current Owner"} wants to hand the Classic Steel website over to you as its <b>Owner</b>. Click below to verify your email and set your own password. You will become the Owner when you finish.` : "You've been invited to join the Classic Steel website admin team. Click below to verify your email and set your own password."}</p><div style="text-align:center;margin:26px 0"><a href="${url}" style="display:inline-block;background:#14181b;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;letter-spacing:.5px">Verify email &amp; create account</a></div><p style="margin:0;color:#8a8478;font-size:13px">This invitation expires in 12 hours. If you didn't expect this, you can safely ignore this email.</p>`,
   );
   const payload = {
     from: c.env.RESEND_FROM_EMAIL,
     to: [email],
-    subject: "You've been invited to Classic Steel Admin",
+    subject: owner ? "You're being made the Owner of Classic Steel Admin" : "You've been invited to Classic Steel Admin",
     html: body,
   };
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -949,6 +949,41 @@ async function ensureAdminInvitationsSchema(c: any) {
   ).run();
   await c.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_admin_invitations_email ON admin_invitations(email,created_at)").run();
   await c.env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_admin_invitations_expires ON admin_invitations(expires_at,used_at)").run();
+  // Ownership handovers: an invitation can make the invitee the Owner (and the inviter an Admin) once they accept.
+  for (const col of ["make_owner INTEGER NOT NULL DEFAULT 0", "invited_by TEXT"]) {
+    try {
+      await c.env.DB.prepare(`ALTER TABLE admin_invitations ADD COLUMN ${col}`).run();
+    } catch {}
+  }
+}
+// Dangerous actions must be confirmed by typing the word "confirm" (checked here as well as in the browser).
+function typedConfirm(b: any) {
+  return (
+    String(b?.confirm || "")
+      .trim()
+      .toLowerCase() === "confirm"
+  );
+}
+async function sendOwnerNotice(c: any, email: string, fromName: string) {
+  if (!c.env.RESEND_API_KEY || !c.env.RESEND_FROM_EMAIL) return false;
+  try {
+    const body = emailWrapper(
+      `<h2 style="margin:0 0 6px;font-family:Georgia,serif;font-size:20px;color:#14181b">You are now the Owner</h2><p style="margin:0 0 18px;color:#5b6167">${fromName.replace(/[<>&]/g, "")} has made you the Owner of the Classic Steel website admin. You now have full control, including adding and removing admins.</p><p style="margin:0;color:#8a8478;font-size:13px">If you did not expect this, please contact the person above.</p>`,
+    );
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: c.env.RESEND_FROM_EMAIL,
+        to: [email],
+        subject: "You are now the Owner of Classic Steel Admin",
+        html: body,
+      }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
 }
 app.get("/api/setup/status", async (c) => {
   const row: any = await c.env.DB.prepare("SELECT id FROM admins LIMIT 1").first();
@@ -2066,7 +2101,14 @@ async function downloadInstagramVideos(c: any, limit = 3) {
         if (r.ok && d.media_url) videoUrl = String(d.media_url);
         if (r.ok && d.thumbnail_url && !String(row.thumbnail_url || "").startsWith("/media/")) thumbUrl = String(d.thumbnail_url);
       }
-      if (!videoUrl) throw new Error("Instagram did not return a video link");
+      if (!videoUrl) {
+        // Instagram leaves media_url out for videos with licensed music or when reel downloads are off: retrying never helps.
+        const e: any = new Error(
+          "Instagram does not allow this video to be downloaded (licensed music or downloads off). Upload the original file instead",
+        );
+        e.permanent = true;
+        throw e;
+      }
       const resp = await fetch(videoUrl, { headers: IG_MEDIA_HEADERS });
       if (!resp.ok || !resp.body) throw new Error(`Video download failed (HTTP ${resp.status})`);
       const declared = Number(resp.headers.get("content-length") || 0);
@@ -2120,7 +2162,9 @@ async function downloadInstagramVideos(c: any, limit = 3) {
       result.downloaded++;
     } catch (e: any) {
       await c.env.MEDIA.delete(videoKey).catch(() => {});
-      await c.env.DB.prepare("UPDATE videos SET download_attempts=COALESCE(download_attempts,0)+1,download_error=? WHERE id=?")
+      await c.env.DB.prepare(
+        `UPDATE videos SET download_attempts=${e?.permanent ? 5 : "COALESCE(download_attempts,0)+1"},download_error=? WHERE id=?`,
+      )
         .bind(String(e?.message || e || "Download failed").slice(0, 200), row.id)
         .run();
       console.error("IG_VIDEO_DOWNLOAD_ERROR", row.video_id, e?.message);
@@ -2668,6 +2712,8 @@ app.post("/api/admin/admin-invites", requireAuth, async (c) => {
     .trim()
     .toLowerCase();
   if (!validEmail(email)) return c.json({ error: "Enter a valid email address" }, 400);
+  const makeOwner = b.make_owner === true;
+  if (makeOwner && !typedConfirm(b)) return c.json({ error: 'Type "confirm" to hand over ownership.' }, 400);
   if (!(await rateLimit(c, `admin-invite-ip:${clientIp(c)}`, 20, 60 * 60 * 1000, 60 * 60 * 1000)))
     return c.json({ error: "Too many invitations. Please try again later." }, 429);
   if (setupOwnerEmails(c.env).includes(email)) return c.json({ error: "The Owner email cannot be invited as an admin." }, 400);
@@ -2694,12 +2740,12 @@ app.post("/api/admin/admin-invites", requireAuth, async (c) => {
   const expiresAt = now + 12 * 60 * 60 * 1000;
   const url = new URL("/admin/invite", c.req.url);
   url.searchParams.set("token", raw);
-  await c.env.DB.prepare("INSERT INTO admin_invitations(id,email,token_hash,expires_at) VALUES(?,?,?,?)")
-    .bind(id, email, tokenHash, expiresAt)
+  await c.env.DB.prepare("INSERT INTO admin_invitations(id,email,token_hash,expires_at,make_owner,invited_by) VALUES(?,?,?,?,?,?)")
+    .bind(id, email, tokenHash, expiresAt, makeOwner ? 1 : 0, me.id)
     .run();
-  await logActivity(c, me.id, me.name || me.email, `Invited ${email} as an admin`);
+  await logActivity(c, me.id, me.name || me.email, makeOwner ? `Invited ${email} to take over as Owner` : `Invited ${email} as an admin`);
   try {
-    await sendAdminInvitation(c, email, url.toString());
+    await sendAdminInvitation(c, email, url.toString(), makeOwner, me.name || me.email);
   } catch (e: any) {
     console.error("ADMIN_INVITE_EMAIL_ERROR", e?.name || "Error", e?.message || String(e));
     return c.json(
@@ -2756,20 +2802,36 @@ app.post("/api/admin/invites/complete", async (c) => {
   const active: any = await c.env.DB.prepare(`SELECT COUNT(*) n FROM admins WHERE role='admin' AND active=1`).first();
   if (Number(active?.n || 0) >= 5) return c.json({ error: "The maximum of 5 Admin accounts has been reached." }, 409);
   const adminId = uid();
+  // An ownership handover only goes ahead if the person who sent it is still the Owner.
+  const inviter: any = Number(row.make_owner)
+    ? await c.env.DB.prepare("SELECT id,name,email FROM admins WHERE id=? AND role='owner' AND active=1")
+        .bind(row.invited_by || "")
+        .first()
+    : null;
   try {
     const passwordHash = await hashPassword(password);
-    const result = await c.env.DB.batch([
+    const stmts: any[] = [];
+    if (inviter) stmts.push(c.env.DB.prepare("UPDATE admins SET role='admin' WHERE id=?").bind(inviter.id));
+    stmts.push(
       c.env.DB.prepare("INSERT INTO admins(id,name,email,password_hash,role,active) VALUES(?,?,?,?,?,1)").bind(
         adminId,
         name,
         email,
         passwordHash,
-        "admin",
+        inviter ? "owner" : "admin",
       ),
       c.env.DB.prepare("UPDATE admin_invitations SET used_at=? WHERE id=? AND used_at IS NULL").bind(Date.now(), row.id),
-    ]);
+    );
+    const result = await c.env.DB.batch(stmts);
     if (result.some((r: any) => r?.success === false)) throw new Error("Database batch returned an unsuccessful statement");
-    await logActivity(c, adminId, name, "Joined as an admin (accepted invitation)");
+    await logActivity(
+      c,
+      adminId,
+      name,
+      inviter
+        ? `Became the Owner (accepted the handover from ${inviter.name || inviter.email})`
+        : "Joined as an admin (accepted invitation)",
+    );
   } catch (e: any) {
     if (
       String(e?.message || "")
@@ -2796,6 +2858,8 @@ app.post("/api/admin/admins/:id/make-owner", requireAuth, async (c) => {
   if (me.role !== "owner") return c.json({ error: "Owner only" }, 403);
   const targetId = c.req.param("id");
   if (targetId === me.id) return c.json({ error: "You are already the Owner." }, 400);
+  const mb: any = await c.req.json().catch(() => ({}));
+  if (!typedConfirm(mb)) return c.json({ error: 'Type "confirm" to transfer ownership.' }, 400);
   const target: any = await c.env.DB.prepare("SELECT id,name,email,active FROM admins WHERE id=? AND role='admin'").bind(targetId).first();
   if (!target) return c.json({ error: "Admin not found." }, 404);
   if (!target.active) return c.json({ error: "This admin account is not active." }, 400);
@@ -2805,7 +2869,8 @@ app.post("/api/admin/admins/:id/make-owner", requireAuth, async (c) => {
   ]);
   if (result.some((r: any) => r?.success === false)) return c.json({ error: "Ownership transfer failed. Please try again." }, 500);
   await logActivity(c, me.id, me.name || me.email, `Transferred Owner access to ${target.name || target.email}`);
-  return c.json({ ok: true });
+  const emailed = await sendOwnerNotice(c, String(target.email), String(me.name || me.email));
+  return c.json({ ok: true, emailed });
 });
 app.get("/api/admin/testimonials", requireAuth, async (c) => {
   await ensureInterimTestimonialsTable(c);

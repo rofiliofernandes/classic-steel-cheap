@@ -132,6 +132,7 @@ function ConfirmModal({
   title,
   message,
   confirmLabel = "Delete",
+  requireText,
   onCancel,
   onConfirm,
 }: {
@@ -139,9 +140,15 @@ function ConfirmModal({
   title: string;
   message: string;
   confirmLabel?: string;
+  requireText?: string;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const [typed, setTyped] = useState("");
+  useEffect(() => {
+    if (!open) setTyped("");
+  }, [open]);
+  const blocked = !!requireText && typed.trim().toLowerCase() !== requireText.toLowerCase();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -166,11 +173,29 @@ function ConfirmModal({
         <div className="confirmEyebrow">CONFIRM ACTION</div>
         <h2 id="confirm-title">{title}</h2>
         <p>{message}</p>
+        {requireText && (
+          <label className="confirmType">
+            <span>
+              To continue, type <b>{requireText}</b> below.
+            </span>
+            <input
+              className="input"
+              autoFocus
+              autoComplete="off"
+              value={typed}
+              onChange={(ev) => setTyped(ev.target.value)}
+              onKeyDown={(ev) => {
+                if (ev.key === "Enter" && !blocked) onConfirm();
+              }}
+              placeholder={requireText}
+            />
+          </label>
+        )}
         <div className="confirmActions">
           <button className="btn outline" type="button" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn dangerButton" type="button" onClick={onConfirm}>
+          <button className="btn dangerButton" type="button" onClick={onConfirm} disabled={blocked}>
             {confirmLabel}
           </button>
         </div>
@@ -1564,7 +1589,9 @@ function Footer({ data }: { data: any }) {
         <span>
           © {new Date().getFullYear()} {BRAND}. All rights reserved.
         </span>
-        <span>Strong Structure • Beautiful Design</span>
+        <span>
+          <a href="/privacy">Privacy Policy</a> &nbsp;•&nbsp; Strong Structure • Beautiful Design
+        </span>
       </div>
     </footer>
   );
@@ -5614,6 +5641,39 @@ function AdminsAdmin({ admins, refresh }: { admins: any[]; refresh: () => void }
     }
   };
   const adminCount = admins.filter((a) => a.role === "admin" && a.active).length;
+  const [handEmail, setHandEmail] = useState("");
+  const handOver = () => {
+    const email = handEmail.trim().toLowerCase();
+    if (!email) return notify("Enter the new owner's email address.");
+    setConfirm({
+      title: "Hand over ownership?",
+      message: `${email} will get an email. When they accept and finish setup they become the Owner and you automatically become a regular Admin. Until they accept, nothing changes.`,
+      confirmLabel: "Send handover email",
+      requireText: "confirm",
+      action: async () => {
+        try {
+          const r = await api("/api/admin/admin-invites", {
+            method: "POST",
+            body: JSON.stringify({ email, make_owner: true, confirm: "confirm" }),
+          });
+          setConfirm(null);
+          setHandEmail("");
+          refresh();
+          if (r.ok) notify("Handover email sent.", "success");
+          else if (r.inviteUrl) {
+            navigator.clipboard?.writeText(r.inviteUrl);
+            notify("The email could not be delivered. The handover link has been copied; send it to them yourself.");
+          }
+        } catch (err: any) {
+          setConfirm(null);
+          if (err?.data?.inviteUrl) {
+            navigator.clipboard?.writeText(err.data.inviteUrl);
+            notify("The email could not be delivered. The handover link has been copied; send it to them yourself.");
+          } else notify(err.message);
+        }
+      },
+    });
+  };
   const deleteAdmin = (a: any) =>
     setConfirm({
       title: "Delete admin?",
@@ -5636,9 +5696,10 @@ function AdminsAdmin({ admins, refresh }: { admins: any[]; refresh: () => void }
       title: "Transfer Owner access?",
       message: `${a.name} (${a.email}) will become the Owner, with full control including Admins and Activity Log. You will become a regular Admin. This can be undone later by whoever holds Owner access.`,
       confirmLabel: "Transfer ownership",
+      requireText: "confirm",
       action: async () => {
         try {
-          await api("/api/admin/admins/" + a.id + "/make-owner", { method: "POST" });
+          await api("/api/admin/admins/" + a.id + "/make-owner", { method: "POST", body: JSON.stringify({ confirm: "confirm" }) });
           setConfirm(null);
           notify("Ownership transferred. Reloading…", "success");
           setTimeout(() => location.reload(), 900);
@@ -5673,10 +5734,28 @@ function AdminsAdmin({ admins, refresh }: { admins: any[]; refresh: () => void }
           <p className="muted adminInviteLimit">
             {adminCount} of 5 Admin accounts in use. Pending invitations also count toward the limit.
           </p>
-          <p className="muted" style={{ marginTop: 10 }}>
-            To make someone the Owner (e.g. handing the site over to a client), invite them as an admin first, have them complete setup,
-            then use "Make Owner" below.
-          </p>
+        </div>
+        <div className="panel adminInvitePanel">
+          <div>
+            <h3>Hand over ownership</h3>
+            <p className="muted">
+              Giving the site to someone new (e.g. your client)? Enter their email. They accept by email and become the Owner; you become a
+              regular Admin. You will be asked to type "confirm" first. To promote an existing admin instead, use "Make Owner" below.
+            </p>
+          </div>
+          <div className="adminInviteForm">
+            <input
+              className="input"
+              type="email"
+              autoComplete="email"
+              placeholder="New owner's email"
+              value={handEmail}
+              onChange={(ev) => setHandEmail(ev.target.value)}
+            />
+            <button className="btn light" onClick={handOver}>
+              Hand over
+            </button>
+          </div>
         </div>
         <div className="list">
           {admins.map((a) => (
@@ -5707,6 +5786,7 @@ function AdminsAdmin({ admins, refresh }: { admins: any[]; refresh: () => void }
         title={confirm?.title || ""}
         message={confirm?.message || ""}
         confirmLabel={confirm?.confirmLabel || "Delete"}
+        requireText={confirm?.requireText}
         onCancel={() => setConfirm(null)}
         onConfirm={() => confirm?.action?.()}
       />
@@ -6475,10 +6555,87 @@ function Admin() {
 // Left empty, the whole site (including /admin) works on any hostname.
 const PUBLIC_HOST = "";
 const ADMIN_HOST_FRONTEND = "";
+function PrivacyPage() {
+  const data = usePublicData();
+  useDocumentMeta("Privacy Policy | Classic Steel", "How Classic Steel handles enquiries, website visits and its Instagram connection.");
+  return (
+    <>
+      <Nav page="privacy" />
+      <main className="contactPage legalPage">
+        <section className="contactHero">
+          <small>LEGAL</small>
+          <h1>Privacy Policy</h1>
+          <p>Last updated: 17 November 2026</p>
+        </section>
+        <section className="referenceWrap legalBody">
+          <h2>Who we are</h2>
+          <p>
+            This website belongs to {BRAND} (SS Railing &amp; MS Fabrication), {LOCATION}. You can reach us on {formatPhone(PHONES[0])}{" "}
+            (call or WhatsApp).
+          </p>
+          <h2>Information we collect</h2>
+          <ul>
+            <li>
+              <b>Enquiries.</b> The enquiry form on the Contact page does not send your details to our servers. It prepares a WhatsApp
+              message with the name, phone number and project details you type, and opens WhatsApp so you can send it to us. Anything you
+              send is then handled in WhatsApp under WhatsApp&rsquo;s own privacy policy.
+            </li>
+            <li>
+              <b>Website visits.</b> We keep simple daily totals of visitors, page views, device type (mobile, tablet or desktop) and button
+              clicks such as Call or WhatsApp. These totals are not linked to you. We do not store IP addresses or names in them. A small
+              cookie lasting 24 hours is used so a returning visitor is not counted twice.
+            </li>
+            <li>
+              <b>Admin sign-in.</b> The people who manage this website sign in with an email address and password, and a sign-in cookie
+              keeps them logged in. Visitors never need to sign in.
+            </li>
+          </ul>
+          <h2>Our Instagram connection</h2>
+          <p>
+            With the permission of the account owner, this website connects to the Instagram account{" "}
+            {data?.instagramUsername ? `@${data.instagramUsername}` : "of Classic Steel"} so that our own photos and videos can be shown in
+            our project gallery. The connection can only read the posts of that business account. We store the connection token in encrypted
+            form and keep copies of the photos and videos we choose to show. We do not collect any information about Instagram users who
+            follow, like or comment on our posts, and we do not post anything to Instagram.
+          </p>
+          <h2>How we use information</h2>
+          <p>
+            Only to reply to your enquiries, to show our work, to keep the website working and to understand roughly how many people use it.
+            We do not sell your information, and we do not use it for advertising.
+          </p>
+          <h2>Sharing</h2>
+          <p>
+            The website runs on Cloudflare&rsquo;s hosting. Maps on the Contact page are provided by Google Maps and WhatsApp messages are
+            carried by WhatsApp. Those services have their own privacy policies. We do not share your information with anyone else unless
+            the law requires it.
+          </p>
+          <h2 id="data-deletion">Deleting your data and disconnecting Instagram</h2>
+          <p>
+            If you sent us an enquiry and want it deleted, message or call us on {formatPhone(PHONES[0])} and we will delete it. Because the
+            website itself stores no enquiry details, there is nothing further to remove from it.
+          </p>
+          <p>
+            The Instagram account owner can end our access at any time in Instagram under Settings &rarr; Apps and websites (or Website
+            permissions), by removing this app. We can also be asked to disconnect it and delete the stored token and copies of the media on
+            our side.
+          </p>
+          <h2>Changes</h2>
+          <p>If this policy changes, the updated version will appear on this page with a new date.</p>
+          <h2>Contact</h2>
+          <p>
+            {BRAND}, {LOCATION}. Phone / WhatsApp: {formatPhone(PHONES[0])}.
+          </p>
+        </section>
+      </main>
+      <Footer data={data} />
+    </>
+  );
+}
 function PublicRoutes() {
   const p = location.pathname.replace(/\/+$/, "") || "/";
   if (p === "/projects" || p === "/gallery") return <Gallery />;
   if (p === "/contact") return <ContactPage />;
+  if (p === "/privacy") return <PrivacyPage />;
   return <Home />;
 }
 function App() {
