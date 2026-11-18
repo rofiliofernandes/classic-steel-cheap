@@ -38,5 +38,5 @@ INSTAGRAM_CONFIG_ID = "1458056229804690"
 crons = ["0 0,12 * * *"]
 
 [observability]
-enabled = true
+enabled = false
 head_sampling_rate = 1
