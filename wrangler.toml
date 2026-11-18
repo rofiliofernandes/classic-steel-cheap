@@ -1,4 +1,4 @@
-name = "classic-steel-cheap"
+.name = "classic-steel-cheap"
 main = "src/worker.ts"
 compatibility_date = "2026-09-05"
 workers_dev = true
@@ -22,12 +22,12 @@ binding = "MEDIA"
 bucket_name = "classic-steel-media"
 
 [vars]
-SITE_NAME = "Capital UPVC Windows & Doors"
-PHONE = "7048235723"
+SITE_NAME = "Classic Steel"
+PHONE = "8449243465"
 MAPS_URL = "https://maps.app.goo.gl/MStEk8sBR9QoNXGu7"
-# Set these once your domain is connected, e.g. admin.capitalupvc.com
-ADMIN_HOST = "classic-steel-cheap.rofitest8.workers.dev"
-INSTAGRAM_REDIRECT_URI = ""
+STORAGE_LIMIT_GB = "5"
+ADMIN_HOST = "classicsteelfabrication.in"
+INSTAGRAM_REDIRECT_URI = "https://classicsteelfabrication.in/api/instagram/callback"
 INSTAGRAM_GRAPH_VERSION = "v24.0"
 RESEND_FROM_EMAIL = ""
 INSTAGRAM_APP_ID = "29282313471432868"
